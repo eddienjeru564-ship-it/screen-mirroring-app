@@ -308,6 +308,3 @@ server.listen(PORT, () => {
   if (TURN_URL) console.log('  TURN configured.');
   else console.log('  STUN-only (no TURN). Fine on a LAN.');
 });
-
-// Exported for potential integration tests / graceful shutdown.
-export { app, server, io, sessions, logger };
