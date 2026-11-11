@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ScreenView — view-only screen sharing</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%236c8cff'/><rect x='24' y='30' width='52' height='34' rx='4' fill='white'/><rect x='42' y='66' width='16' height='6' rx='2' fill='white'/></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="logo"><span class="dot"></span> ScreenView</div>
+      <div class="spacer"></div>
+      <a href="/admin">Admin</a>
+    </div>
+
+    <h1>Share your screen. View-only, by design.</h1>
+    <p class="lede">
+      One person shares a screen, another watches it live in the browser through a
+      short join code. The viewer can only watch — there is no way to control the
+      host. No installs, no accounts.
+    </p>
+
+    <div class="cards">
+      <div class="card">
+        <h2>🖥️ Share my screen</h2>
+        <p>Pick a screen or window and get a 6-digit code to hand to your viewer.</p>
+        <a class="btn block" href="/host">Start sharing</a>
+      </div>
+      <div class="card">
+        <h2>👁️ View a screen</h2>
+        <p>Got a code? Enter it to watch the shared screen live.</p>
+        <a class="btn secondary block" href="/view">Enter a code</a>
+      </div>
+    </div>
+
+    <footer class="note">
+      Works on Chrome, Edge and Firefox (desktop). Your browser shows its own
+      “you are sharing your screen” indicator while you share — ScreenView never
+      hides that. Codes expire after 10 minutes if unused.
+    </footer>
+  </div>
+</body>
+</html>

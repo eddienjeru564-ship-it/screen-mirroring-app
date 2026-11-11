@@ -1,0 +1,7 @@
+node_modules/
+logs/*.jsonl
+.env
+test-results/
+playwright-report/
+*.log
+.DS_Store

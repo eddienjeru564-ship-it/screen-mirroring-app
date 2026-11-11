@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Share your screen — ScreenView</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%236c8cff'/><rect x='24' y='30' width='52' height='34' rx='4' fill='white'/><rect x='42' y='66' width='16' height='6' rx='2' fill='white'/></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="logo"><span class="dot"></span> ScreenView</div>
+      <div class="spacer"></div>
+      <a href="/">Home</a>
+    </div>
+
+    <!-- Step 1: set options and start -->
+    <section id="setup" class="panel">
+      <h1>Share your screen</h1>
+      <p class="lede">Choose a quality level, optionally set a password, then start.
+        Your browser will ask which screen or window to share.</p>
+      <div class="card">
+        <label for="quality">Quality</label>
+        <select id="quality">
+          <option value="low">Low — saves bandwidth (≈0.5 Mbps, 10 fps)</option>
+          <option value="medium" selected>Medium — balanced (≈1.8 Mbps, 20 fps)</option>
+          <option value="high">High — sharpest (≈5 Mbps, 30 fps)</option>
+        </select>
+
+        <label for="password">Session password <span class="muted">(optional)</span></label>
+        <input id="password" type="password" autocomplete="off"
+               placeholder="Leave blank for no password" />
+
+        <div style="margin-top:18px">
+          <button id="startBtn" class="btn block">Start sharing</button>
+        </div>
+        <p id="setupError" class="alert err hidden" style="margin-top:14px"></p>
+      </div>
+    </section>
+
+    <!-- Step 2: live sharing dashboard -->
+    <section id="live" class="panel hidden">
+      <div class="row" style="justify-content:space-between">
+        <h1 style="margin:0">You’re sharing</h1>
+        <span id="liveBadge" class="badge live"><span class="led"></span> Live</span>
+      </div>
+
+      <div class="card">
+        <label>Join code — share this with your viewer</label>
+        <div id="code" class="codebox">—</div>
+        <div class="row" style="margin-top:12px">
+          <button id="copyBtn" class="btn secondary">Copy code</button>
+          <span id="pwNote" class="muted hidden">🔒 Password protected</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="stat"><span class="k">Viewers</span><span id="viewerCount" class="v">0</span></div>
+        <div class="stat"><span class="k">Session time</span><span id="timer" class="v">00:00</span></div>
+        <div class="stat">
+          <span class="k">Quality</span>
+          <span class="v" style="font-size:16px">
+            <select id="liveQuality" style="padding:4px 8px;font-size:14px;width:auto">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </span>
+        </div>
+      </div>
+
+      <div class="stage">
+        <video id="preview" autoplay playsinline muted></video>
+        <div id="previewOverlay" class="overlay hidden"></div>
+      </div>
+      <p class="muted">This preview is only on your machine. A small
+        “sharing your screen” indicator from your browser is normal and cannot be
+        turned off — it confirms to you that sharing is active.</p>
+
+      <div class="row">
+        <button id="endBtn" class="btn danger">End session</button>
+        <span id="connBadge" class="badge"><span class="led"></span> <span id="connText">Waiting for viewer…</span></span>
+      </div>
+    </section>
+
+    <!-- Step 3: ended -->
+    <section id="ended" class="panel hidden">
+      <h1>Session ended</h1>
+      <p id="endedReason" class="lede"></p>
+      <div class="row">
+        <a class="btn" href="/host">Share again</a>
+        <a class="btn secondary" href="/">Home</a>
+      </div>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="host.js"></script>
+</body>
+</html>
