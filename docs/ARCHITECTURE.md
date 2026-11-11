@@ -29,6 +29,8 @@ browsers over WebRTC.
 | `public/host.js` | Captures the screen, creates the session, keeps one `RTCPeerConnection` per viewer, performs ICE restarts. |
 | `public/view.js` | Code entry, answer-only peer connection, status/reconnect UI, fullscreen. |
 | `public/admin.js` | Password-protected session table. |
+| `public/app.js` | Loaded on every page: registers the service worker, shows the "Install app" button, provides toast notifications. |
+| `public/sw.js` + `manifest.webmanifest` | Make ScreenView installable as an app. Network-first caching of the static shell only; never touches `/api` or `/socket.io`. |
 
 ## Key design choices
 
