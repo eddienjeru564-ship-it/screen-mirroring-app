@@ -38,7 +38,7 @@ aware they are sharing.
   need the full Perfect Negotiation rollback dance. ICE restarts are always
   initiated by the host.
 - **One `RTCPeerConnection` per viewer (mesh from the host).** Simpler than an
-  SFU and fine for `MAX_VIEWERS` ≤ 3. Decision: `MAX_VIEWERS` default 3.
+  SFU and fine for `MAX_VIEWERS` ≤ 3. Decision: `MAX_VIEWERS` defaults to 1 (per the brief), configurable up to 3.
 - **No data channel is ever created, on either side.** This is the structural
   guarantee of "view-only by design" — there is no transport for viewer→host
   input to travel over. Verified by an e2e test.

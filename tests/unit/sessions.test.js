@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionManager, formatCode, normaliseCode } from '../../server/sessions.js';
+import { SessionManager, formatCode, normaliseCode, RETAIN_ENDED_MS } from '../../server/sessions.js';
 
 function makeClock(start = 1_000_000) {
   let t = start;
@@ -53,8 +53,8 @@ test('unused code expires after codeExpiryMs', () => {
   const s = m.createSession();
   clock.advance(1001);
   assert.equal(m.joinByCode(s.code).error, 'expired');
-  // ...and is dead forever afterwards.
-  assert.equal(m.joinByCode(s.code).error, 'invalid_code');
+  // ...and is dead forever afterwards (still reported as expired, never joinable).
+  assert.equal(m.joinByCode(s.code).error, 'expired');
 });
 
 test('a live session does not expire once a viewer has joined', () => {
@@ -75,7 +75,8 @@ test('sweep ends expired unused sessions', () => {
   const ended = m.sweep();
   assert.equal(ended.length, 1);
   assert.equal(ended[0].endReason, 'expired');
-  assert.equal(m.joinByCode(s.code).error, 'invalid_code');
+  // Swept before anyone tried it: the viewer still gets an accurate error.
+  assert.equal(m.joinByCode(s.code).error, 'expired');
 });
 
 test('session full when maxViewers reached; slot frees on leave', () => {
@@ -97,7 +98,7 @@ test('ended session code is dead forever', () => {
   const m = new SessionManager({});
   const s = m.createSession();
   m.endSession(s.sessionId, 'host_ended');
-  assert.equal(m.joinByCode(s.code).error, 'invalid_code');
+  assert.equal(m.joinByCode(s.code).error, 'ended');
   assert.equal(m.verifyHost(s.sessionId, s.hostToken), null);
 });
 
@@ -130,4 +131,15 @@ test('host grace period ends session with host_timeout', () => {
   clock.advance(200);
   const ended = m.sweep();
   assert.equal(ended[0].endReason, 'host_timeout');
+});
+
+test('ended sessions and dead codes are purged after the retention window', () => {
+  const clock = makeClock();
+  const m = new SessionManager({ now: clock.now });
+  const s = m.createSession();
+  m.endSession(s.sessionId, 'host_ended');
+  clock.advance(RETAIN_ENDED_MS);
+  m.sweep();
+  assert.equal(m.getById(s.sessionId), null);
+  assert.equal(m.joinByCode(s.code).error, 'invalid_code');
 });

@@ -19,6 +19,7 @@ const state = {
   pendingCandidates: [],
   gone: false,
   dataChannelsSeen: 0, // should always stay 0 — asserted by the view-only test
+  offersReceived: 0, // increments on every (re)negotiation, incl. ICE restarts
 };
 
 // Read-only surface for e2e tests (verifies view-only guarantees).
@@ -30,7 +31,16 @@ window.screenview = {
   },
   get connectionState() { return state.pc?.connectionState ?? 'none'; },
   get videoWidth() { return $('video')?.videoWidth ?? 0; },
+  get offersReceived() { return state.offersReceived; },
+  get localSdp() { return state.pc?.localDescription?.sdp ?? ''; },
+  get framesDecoded() {
+    return $('video')?.getVideoPlaybackQuality?.().totalVideoFrames ?? 0;
+  },
 };
+
+if (new URLSearchParams(location.search).get('test') === '1') {
+  window.screenview.dropSignaling = () => socket.io.engine.close();
+}
 
 // ---------- Code input auto-formatting (NNN-NNN) ----------
 const codeInput = $('codeInput');
@@ -136,6 +146,7 @@ socket.on('signal', async ({ from, data }) => {
   const pc = state.pc;
   try {
     if (data.description) {
+      state.offersReceived++;
       await pc.setRemoteDescription(data.description); // host's offer (incl. ICE restart)
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);

@@ -30,6 +30,15 @@ window.screenview = {
   get sharing() { return !!state.stream; },
 };
 
+// Test-only hooks (?test=1) used by the e2e reconnect tests. Not reachable in
+// normal use.
+if (new URLSearchParams(location.search).get('test') === '1') {
+  window.screenview.dropSignaling = () => socket.io.engine.close();
+  window.screenview.forceIceRestart = () => {
+    for (const { pc } of state.peers.values()) pc.restartIce();
+  };
+}
+
 // Restore a reconnectable identity if the page was reloaded mid-session.
 try {
   const saved = JSON.parse(sessionStorage.getItem('sv-host') || 'null');

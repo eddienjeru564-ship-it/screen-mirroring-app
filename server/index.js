@@ -17,14 +17,14 @@ import { SessionLogger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, '..', 'public');
-const LOG_FILE = join(__dirname, '..', 'logs', 'sessions.jsonl');
+const LOG_FILE = process.env.LOG_FILE || join(__dirname, '..', 'logs', 'sessions.jsonl');
 
 // ---- Config (env-driven, LAN-friendly defaults) ----------------------------
 const num = (v, d) => (v != null && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : d);
 const PORT = num(process.env.PORT, 3000);
 const CODE_EXPIRY_MS = num(process.env.CODE_EXPIRY_MS, 10 * 60 * 1000);
 const GRACE_MS = num(process.env.GRACE_MS, 60 * 1000);
-const MAX_VIEWERS = num(process.env.MAX_VIEWERS, 3);
+const MAX_VIEWERS = num(process.env.MAX_VIEWERS, 1);
 const RATE_LIMIT_MAX = num(process.env.RATE_LIMIT_MAX, 5);
 const RATE_LIMIT_WINDOW_MS = num(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000);
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';

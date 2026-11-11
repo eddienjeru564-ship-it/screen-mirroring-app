@@ -6,6 +6,9 @@
 
 import { randomInt, randomUUID } from 'node:crypto';
 
+/** How long ended sessions and their codes are remembered (for accurate errors). */
+export const RETAIN_ENDED_MS = 60 * 60 * 1000;
+
 /** Generate a 6-digit code as a zero-padded string, e.g. "482913". */
 function rawCode() {
   // crypto.randomInt is uniform and not sequentially guessable.
@@ -40,6 +43,13 @@ export class SessionManager {
     this.byCode = new Map();
     /** @type {Map<string, object>} sessionId -> session (always, until purged) */
     this.byId = new Map();
+    /**
+     * code -> { reason, at } for recently ended sessions, so a late viewer is
+     * told "expired"/"ended" rather than "invalid". These codes still cannot be
+     * joined. Entries are forgotten after RETAIN_ENDED_MS.
+     * @type {Map<string, {reason: string, at: number}>}
+     */
+    this.deadCodes = new Map();
   }
 
   /** Create a session for a host. Returns the session object. */
@@ -82,7 +92,11 @@ export class SessionManager {
   joinByCode(codeInput, password = null) {
     const code = normaliseCode(codeInput);
     const session = this.byCode.get(code);
-    if (!session) return { ok: false, error: 'invalid_code' };
+    if (!session) {
+      const dead = this.deadCodes.get(code);
+      if (!dead) return { ok: false, error: 'invalid_code' };
+      return { ok: false, error: dead.reason === 'expired' ? 'expired' : 'ended' };
+    }
     if (session.status === 'ended') return { ok: false, error: 'ended' };
     if (this.isExpired(session)) {
       this.endSession(session.sessionId, 'expired');
@@ -154,6 +168,7 @@ export class SessionManager {
     s.endReason = reason;
     s.graceUntil = null;
     this.byCode.delete(s.code); // code is dead forever
+    this.deadCodes.set(s.code, { reason, at: s.endedAt });
     return s;
   }
 
@@ -161,8 +176,15 @@ export class SessionManager {
   sweep() {
     const ended = [];
     const t = this.now();
+    for (const [code, dead] of this.deadCodes) {
+      if (t - dead.at >= RETAIN_ENDED_MS) this.deadCodes.delete(code);
+    }
     for (const s of this.byId.values()) {
-      if (s.status === 'ended') continue;
+      if (s.status === 'ended') {
+        // Free memory for long-finished sessions (the jsonl log keeps the record).
+        if (t - s.endedAt >= RETAIN_ENDED_MS) this.byId.delete(s.sessionId);
+        continue;
+      }
       if (this.isExpired(s)) {
         ended.push(this.endSession(s.sessionId, 'expired'));
       } else if (s.graceUntil != null && t >= s.graceUntil) {
