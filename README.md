@@ -24,6 +24,11 @@ Nothing to install for either person.
   connection badge, reconnecting overlay
 - Optional session password, brute-force rate limiting, Low/Medium/High quality
 - Session log (`logs/sessions.jsonl`) and a password-protected `/admin` page
+- **Installable as an app** (Chrome/Edge "Install app" button): opens in its own
+  window with its own icon, no app store or installer needed
+- One-click **invite link** for the viewer that uses the host's network address
+  and opens with the code already filled in
+- Notifications when a viewer joins or leaves; **F** or double-click for fullscreen
 
 ## Quick start
 
@@ -89,18 +94,19 @@ npm run test:e2e
 SOAK_MINUTES=120 npm run test:soak
 ```
 
-24 unit tests and 15 end-to-end tests; a 120-minute soak run is recorded in
+24 unit tests and 17 end-to-end tests; a 120-minute soak run is recorded in
 [docs/TESTING.md](docs/TESTING.md). `npm run screenshots` regenerates the
-images in `docs/img/`.
+images in `docs/img/`; `npm run icons` regenerates the app icons.
 
 ## Project layout
 
 ```
 server/   index.js (Express + Socket.io), sessions.js, rateLimit.js, logger.js
-public/   index/host/view/admin pages, rtc.js (shared WebRTC helpers), styles.css
+public/   index/host/view/admin pages, rtc.js (shared WebRTC helpers), app.js
+          (install + toasts), sw.js (service worker), manifest.webmanifest, icons/
 tests/    unit/ (node --test), e2e/ (Playwright, incl. soak.spec.js)
 docs/     ARCHITECTURE, SECURITY, TESTING, USER_GUIDE, img/
-scripts/  screenshots.js
+scripts/  screenshots.js, icons.js
 ```
 
 ## Documentation

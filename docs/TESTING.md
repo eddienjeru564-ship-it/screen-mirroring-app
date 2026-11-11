@@ -83,6 +83,8 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 13 | admin | wrong password rejected; right one lists the ended session with `host_ended` |
 | 14 | host vanishes | host tab closed → viewer sees "Host disconnected" after the grace period |
 | 15 | quality presets | Low → viewer receives 640 px wide; switching to High live → 1280 px |
+| 16 | clean pages + installable | `/`, `/host`, `/view`, `/admin`: zero console errors **or warnings**, zero failed or 4xx/5xx requests, service worker registers; Chrome's own `Page.getInstallabilityErrors` reports no manifest problems |
+| 17 | invite link | link uses the LAN address (not `localhost`), opens the viewer with the code filled in, joins, host gets a "now watching" notification |
 
 ## Results
 
@@ -90,7 +92,7 @@ Latest full run (Chromium, Linux, headless):
 
 ```
 unit:  24 passed, 0 failed
-e2e:   15 passed, 0 failed  (35–60 s depending on machine load; run repeatedly with no flakes)
+e2e:   17 passed, 0 failed  (35–60 s depending on machine load; run repeatedly with no flakes)
 ```
 
 ## 120-minute soak test

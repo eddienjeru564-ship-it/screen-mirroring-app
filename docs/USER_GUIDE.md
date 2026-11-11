@@ -11,6 +11,11 @@ and the viewer opens the host laptop's network address, for example
 
 ![Landing page](img/landing.png)
 
+**Install it as an app (optional).** In Chrome or Edge, click **⬇ Install app**
+at the top of the page (or the install icon in the address bar). ScreenView then
+opens in its own window from your Start menu, Dock or desktop, like any other
+app. You can skip this; it works the same in a normal browser tab.
+
 ---
 
 ## If you are sharing your screen (the host)
@@ -28,7 +33,10 @@ and the viewer opens the host laptop's network address, for example
    ![Host setup](img/host-setup.png)
 
 5. You now see a **6-digit code** like `232-704`. Tell it to your viewer (or
-   click **Copy code**). The code works for 10 minutes if nobody uses it.
+   click **Copy code**). Or click **Copy link** and send the link in a chat
+   message: it opens ScreenView on the viewer's computer with the code already
+   filled in. The code works for 10 minutes if nobody uses it.
+   A small notification appears whenever a viewer joins or leaves.
 
    ![Host sharing](img/host-live.png)
 
@@ -54,7 +62,8 @@ more than a minute, the session closes.
 
 ## If you are watching (the viewer)
 
-1. Open ScreenView and click **Enter a code**.
+1. If the host sent you a link, open it and skip to step 3 — the code is
+   already filled in. Otherwise open ScreenView and click **Enter a code**.
 2. Type the 6 digits — the dash is added for you — and click **Watch**.
 
    ![Enter code](img/viewer-enter-code.png)
@@ -65,8 +74,8 @@ more than a minute, the session closes.
 
    ![Watching](img/viewer-watching.png)
 
-5. Click **⛶ Fullscreen** to fill your screen; press **Esc** to leave
-   fullscreen.
+5. Click **⛶ Fullscreen**, press **F**, or double-click the picture to fill
+   your screen; press **Esc** (or **F** again) to leave fullscreen.
 6. Click **Leave** when you're done.
 
 ### Messages you might see

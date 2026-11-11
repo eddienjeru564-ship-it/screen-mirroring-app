@@ -118,3 +118,24 @@ aware they are sharing.
   specifies), so the reconnect test simulates a signaling drop by force-closing
   the Socket.io transport, and ICE failure by `pc.restartIce()` — both options
   named in the brief. A full server restart ends active sessions.
+
+## "App UI" follow-up
+
+- **Installable web app (PWA) rather than a desktop app.** The brief says "no
+  installs for either user", so ScreenView stays a web page. A web app manifest,
+  icons and a service worker make it *optionally* installable from Chrome/Edge
+  in one click: own window, own icon, Start-menu/Dock entry. An Electron app was
+  rejected: it would need a separate download and installer per OS, and would
+  add a second copy of Chromium to maintain.
+- **Service worker is network-first** and skips `/api`, `/socket.io` and any
+  URL with a query string. A running server therefore always serves the latest
+  code; the cache is only used when the server can't be reached. Service
+  workers need a secure context, so viewers on plain-HTTP LAN addresses simply
+  use the normal page.
+- **Invite link uses the LAN address.** The host is usually on `localhost`, so a
+  link built from the page's own address would point the viewer at their own
+  machine. `/api/info` returns the server's LAN IPv4 addresses and the host page
+  uses the first one. On multi-network machines (e.g. Wi-Fi + VPN) the first
+  address might not be the one the viewer can reach; the code still works.
+- **Leaving the host page asks for confirmation** while sharing, because closing
+  the tab ends the session for the viewer.

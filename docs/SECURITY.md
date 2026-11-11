@@ -112,6 +112,9 @@ is disabled (HTTP 503) rather than open. Table cells are filled with
   attacker with many IPs is limited per IP only.
 - `/api/ice-config` hands TURN credentials to anyone who loads it (needed by
   design); see section 6.
+- `/api/info` lists the server's LAN IPv4 addresses (used to build the invite
+  link). On a LAN this is harmless; on a public server it reveals internal
+  addresses, so remove the endpoint or put the server behind a proxy that hides it.
 - No user accounts: anyone who has the code (and password, if set) can watch.
 - Mesh topology: each viewer is a separate upload from the host, so 3 viewers
   is the practical maximum.
