@@ -82,3 +82,39 @@ aware they are sharing.
   read from `TURN_URL`/`TURN_USERNAME`/`TURN_CREDENTIAL`. The client fetches ICE
   config from `GET /api/ice-config` so TURN credentials are not hardcoded in
   static files.
+
+## Decisions made during the build
+
+- **Expired/ended codes report accurately.** The server's 5-second sweep could
+  remove an expired code before a viewer tried it, so the viewer saw "invalid
+  code" instead of "expired" (caught by the e2e test). Ended codes are now
+  remembered for 1 hour with their reason; they are still never joinable.
+  Ended sessions are also purged from memory after 1 hour, so a long-running
+  server does not grow without bound.
+- **One path for ending sessions.** Expiry discovered during a join is only
+  reported; the sweep ends it. Every end (host ended, Stop sharing, expiry,
+  host timeout) goes through one function that first logs a `viewer_leave` for
+  anyone still watching, then `session_end`. This fixed admin rows showing
+  "1 / 0" joins/leaves.
+- **`ADMIN_PASSWORD` unset ⇒ admin disabled (503)**, not open and not a default
+  password. Safer for a zero-config start.
+- **Node 22 LTS required.** `node --test "tests/unit/**/*.test.js"` needs glob
+  support (Node 21+); the brief asked for LTS.
+- **Simplest deployment = server on the host's laptop.** Browsers allow
+  `getDisplayMedia` only on HTTPS or `localhost`; viewing works over plain
+  HTTP. So the zero-config path is: host uses `localhost`, viewers use the
+  host's LAN IP. Remote deployment needs HTTPS (+ TURN beyond the LAN).
+- **Session persistence across page reloads was not built.** A reload loses the
+  captured stream anyway (the browser requires a new user gesture to capture),
+  so a reloaded host starts a new session. Network drops do not need a reload.
+- **Configurable test ports and log file** (`E2E_PORT_BASE`, `LOG_FILE`) so
+  the e2e suite can run while a soak test holds the default ports, and tests
+  never write to the real log.
+- **Browsers tested.** Automated tests run in Chromium only (the browser
+  available headlessly here). The app uses only standard APIs
+  (`getDisplayMedia`, `RTCPeerConnection`, `restartIce`) that Edge and Firefox
+  support, but Edge/Firefox were not tested automatically; see limitations.
+- **Server restart is not survivable.** Sessions are in memory (as the brief
+  specifies), so the reconnect test simulates a signaling drop by force-closing
+  the Socket.io transport, and ICE failure by `pc.restartIce()` — both options
+  named in the brief. A full server restart ends active sessions.

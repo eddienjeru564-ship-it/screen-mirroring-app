@@ -78,6 +78,7 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 12 | rate limiting | 4th wrong code in a minute → "Too many attempts" |
 | 13 | admin | wrong password rejected; right one lists the ended session with `host_ended` |
 | 14 | host vanishes | host tab closed → viewer sees "Host disconnected" after the grace period |
+| 15 | quality presets | Low → viewer receives 640 px wide; switching to High live → 1280 px |
 
 ## Results
 
@@ -85,7 +86,7 @@ Latest full run (Chromium, Linux, headless):
 
 ```
 unit:  20 passed, 0 failed
-e2e:   14 passed, 0 failed  (≈32 s; run 3× in a row with no flakes)
+e2e:   15 passed, 0 failed  (35–60 s depending on machine load; run repeatedly with no flakes)
 ```
 
 ## 120-minute soak test

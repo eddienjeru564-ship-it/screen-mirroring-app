@@ -193,3 +193,18 @@ test('host vanishing ends the session after the grace period', async ({ browser 
   // Server GRACE_MS is 2 s and sweeps every 5 s.
   await expect(viewer.page.locator('#goneTitle')).toHaveText('Host disconnected', { timeout: 15_000 });
 });
+
+test('quality preset changes the received resolution, live', async ({ browser }) => {
+  // Test source is 1280x720. Low scales down by 2; High sends full size.
+  const host = await startHost(browser, MAIN, { quality: 'low' });
+  const viewer = await openViewer(browser, MAIN, host.code);
+  await expectLiveVideo(viewer.page);
+  await expect.poll(() => viewer.page.evaluate(() => window.screenview.videoWidth), {
+    timeout: 15_000,
+  }).toBe(640);
+
+  await host.page.selectOption('#liveQuality', 'high');
+  await expect.poll(() => viewer.page.evaluate(() => window.screenview.videoWidth), {
+    timeout: 15_000,
+  }).toBe(1280);
+});
