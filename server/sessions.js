@@ -70,7 +70,6 @@ export class SessionManager {
       endedAt: null,
       endReason: null,
       expiresAt: t + this.codeExpiryMs, // only meaningful while 'waiting'
-      hostConnected: true,
       graceUntil: null,
       viewers: new Map(), // viewerId -> { viewerToken, joinedAt, leftAt, connected }
     };

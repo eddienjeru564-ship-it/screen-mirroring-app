@@ -71,9 +71,6 @@ async function join() {
     state.sessionId = res.sessionId;
     state.viewerId = res.viewerId;
     state.viewerToken = res.viewerToken;
-    sessionStorage.setItem('sv-viewer', JSON.stringify({
-      sessionId: res.sessionId, viewerId: res.viewerId, viewerToken: res.viewerToken,
-    }));
     setupPeer();
     showWatch();
   });
@@ -210,16 +207,13 @@ $('fsBtn').addEventListener('click', () => {
 $('leaveBtn').addEventListener('click', () => {
   state.gone = true;
   teardownPeer();
-  sessionStorage.removeItem('sv-viewer');
   socket.disconnect();
   showGone('left');
 });
 
 function showGone(reason) {
-  if (state.gone && reason !== 'left') { /* still show message */ }
   state.gone = true;
   teardownPeer();
-  sessionStorage.removeItem('sv-viewer');
   $('watch').classList.add('hidden');
   $('entry').classList.add('hidden');
   $('gone').classList.remove('hidden');

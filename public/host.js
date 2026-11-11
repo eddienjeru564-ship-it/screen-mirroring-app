@@ -3,9 +3,7 @@
 // The host is the sole offerer. Each viewer gets its own RTCPeerConnection with
 // the screen tracks added sendonly. ICE restarts are host-initiated on failure.
 
-import {
-  fetchIceConfig, applyQuality, monitorConnection, stateLabel, formatElapsed,
-} from './rtc.js';
+import { fetchIceConfig, applyQuality, monitorConnection, formatElapsed } from './rtc.js';
 
 const $ = (id) => document.getElementById(id);
 const socket = io({ reconnection: true, reconnectionDelayMax: 5000 });
@@ -17,7 +15,7 @@ const state = {
   quality: 'medium',
   iceServers: [],
   startedAt: 0,
-  /** @type {Map<string, {pc: RTCPeerConnection, cleanup: Function, makingOffer: boolean}>} */
+  /** @type {Map<string, {pc: RTCPeerConnection, cleanup: Function}>} */
   peers: new Map(),
   ended: false,
 };
@@ -38,15 +36,6 @@ if (new URLSearchParams(location.search).get('test') === '1') {
     for (const { pc } of state.peers.values()) pc.restartIce();
   };
 }
-
-// Restore a reconnectable identity if the page was reloaded mid-session.
-try {
-  const saved = JSON.parse(sessionStorage.getItem('sv-host') || 'null');
-  if (saved?.sessionId && saved?.hostToken) {
-    state.sessionId = saved.sessionId;
-    state.hostToken = saved.hostToken;
-  }
-} catch { /* ignore */ }
 
 // ---------- Capture ----------
 async function getScreenStream() {
@@ -119,9 +108,6 @@ $('startBtn').addEventListener('click', async () => {
     }
     state.sessionId = res.sessionId;
     state.hostToken = res.hostToken;
-    sessionStorage.setItem('sv-host', JSON.stringify({
-      sessionId: res.sessionId, hostToken: res.hostToken,
-    }));
     showLive(res.codePretty, !!res.hasPassword);
   });
 });
@@ -144,7 +130,7 @@ function makePeer(viewerId) {
   closePeer(viewerId);
 
   const pc = new RTCPeerConnection({ iceServers: state.iceServers });
-  const entry = { pc, cleanup: null, makingOffer: false };
+  const entry = { pc, cleanup: null };
   state.peers.set(viewerId, entry);
 
   for (const track of state.stream.getTracks()) {
@@ -160,14 +146,11 @@ function makePeer(viewerId) {
 
   pc.addEventListener('negotiationneeded', async () => {
     try {
-      entry.makingOffer = true;
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       sendSignal(viewerId, { description: pc.localDescription });
     } catch (err) {
       console.warn('offer failed for', viewerId, err?.message);
-    } finally {
-      entry.makingOffer = false;
     }
   });
 
@@ -278,7 +261,6 @@ function showEnded(reason) {
     if (state.stream._testInterval) clearInterval(state.stream._testInterval);
   }
   state.stream = null;
-  sessionStorage.removeItem('sv-host');
   $('live').classList.add('hidden');
   $('setup').classList.add('hidden');
   $('ended').classList.remove('hidden');

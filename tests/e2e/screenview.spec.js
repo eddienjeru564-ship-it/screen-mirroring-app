@@ -161,10 +161,12 @@ test('too many wrong codes are rate limited', async ({ browser }) => {
 });
 
 test('admin rejects a wrong password and lists sessions with the right one', async ({ browser }) => {
-  // Create and end one session so there is something in the log.
+  // Create a session with one viewer, then end it, so the log has a full record.
   const host = await startHost(browser);
+  const viewer = await openViewer(browser, MAIN, host.code);
+  await expectLiveVideo(viewer.page);
   await host.page.click('#endBtn');
-  await expect(host.page.locator('#ended')).toBeVisible();
+  await expect(viewer.page.locator('#gone')).toBeVisible();
 
   const page = await browser.newPage();
   await page.goto(`${MAIN}/admin`);
@@ -179,6 +181,7 @@ test('admin rejects a wrong password and lists sessions with the right one', asy
   const row = page.locator('#rows tr', { hasText: host.code });
   await expect(row).toBeVisible();
   await expect(row).toContainText('host_ended');
+  await expect(row).toContainText('1 / 1'); // the viewer's join AND leave were logged
 });
 
 test('host vanishing ends the session after the grace period', async ({ browser }) => {

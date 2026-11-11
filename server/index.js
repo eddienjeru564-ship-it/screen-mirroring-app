@@ -162,7 +162,6 @@ io.on('connection', (socket) => {
     socket.join(roomFor(session.sessionId));
     socketCtx.set(socket.id, { sessionId: session.sessionId, role: 'host' });
     session.hostSocketId = socket.id;
-    session.hostConnected = true;
     session.graceUntil = null; // host is back; cancel teardown
     // Hand back the live viewers so the host can re-offer to each.
     const viewers = [...session.viewers.entries()]
@@ -276,7 +275,6 @@ io.on('connection', (socket) => {
 
     if (ctx.role === 'host') {
       // Keep the session alive for GRACE_MS so the host can reconnect.
-      session.hostConnected = false;
       session.graceUntil = Date.now() + sessions.graceMs;
     } else {
       sessions.markViewerLeft(session.sessionId, ctx.viewerId);

@@ -2,9 +2,11 @@
 
 import { expect } from '@playwright/test';
 
-export const MAIN = 'http://localhost:3100';
-export const SHORT_EXPIRY = 'http://localhost:3101';
-export const STRICT_RATE = 'http://localhost:3102';
+// Must match playwright.config.js (E2E_PORT_BASE lets two runs coexist).
+const BASE_PORT = Number(process.env.E2E_PORT_BASE || 3100);
+export const MAIN = `http://localhost:${BASE_PORT}`;
+export const SHORT_EXPIRY = `http://localhost:${BASE_PORT + 1}`;
+export const STRICT_RATE = `http://localhost:${BASE_PORT + 2}`;
 
 /** Fail the test on any console error or uncaught exception in the page. */
 export function trackErrors(page, label) {
