@@ -56,21 +56,44 @@ written. The test that verifies each item is named where there is one.
 - [x] e2e: reconnect after signaling drop, and after ICE restart
 - [x] e2e: view-only (no data channels, no outgoing tracks, recvonly SDP)
 - [x] e2e: admin rejects wrong password, shows sessions
-- [x] soak test (default 5 min; 1-minute run verified)
-- [ ] 120-minute soak run recorded in TESTING.md
+- [x] soak test (default 5 min; 1-minute and 120-minute runs verified)
+- [x] 120-minute soak run recorded in TESTING.md (240 checks, 0 stalls)
 
 ## Docs
 - [x] README.md (with screenshots)
 - [x] docs/ARCHITECTURE.md (Mermaid sequence + reconnect diagram)
 - [x] docs/SECURITY.md
-- [x] docs/TESTING.md (soak results pending)
+- [x] docs/TESTING.md (including 120-minute soak results)
 - [x] docs/USER_GUIDE.md (with screenshots)
 
 ## Final
 - [x] `npm install && npm start` runs on a fresh clone with zero config (verified in a clean clone)
 - [x] No console errors in a normal session (e2e asserts zero errors; page-load test also zero warnings)
 - [x] Clean code, no dead code / debug logs (swept; only the startup banner logs)
-- [ ] Final commit + summary
+- [x] Final commit + summary
 
 ## Summary
-_(filled in after the 120-minute soak finishes)_
+### What's done
+Every must-have (1–8) and nice-to-have (9–11) from the brief, plus an
+installable app UI (PWA), invite links, toasts and accessibility polish.
+24 unit tests and 17 end-to-end tests pass; the 120-minute soak ran with
+240 checks, 0 stalls, 0 console errors and no memory growth.
+
+### How to demo
+1. `npm install` then `npm start` on the host laptop (Node 22+).
+2. Host: open `http://localhost:3000` → **Share my screen** → **Start sharing**
+   → pick a screen. A code like `482-913` appears, plus an invite link.
+3. Viewer (another computer on the same network): open the invite link, or go
+   to `http://<host-LAN-IP>:3000/view` and type the code.
+4. Show: live video, timer, viewer count, quality switch, fullscreen (F),
+   unplugging Wi-Fi briefly (it reconnects without the code), **End session**.
+5. Admin: start with `ADMIN_PASSWORD=secret npm start`, open `/admin`.
+
+### Known limitations
+- Sessions live in memory: a server restart ends all active sessions.
+- Automated tests run in Chromium only; Edge/Firefox use the same standard
+  APIs but were not tested automatically.
+- Screen capture needs HTTPS or `localhost` on the host's side.
+- Peer-to-peer mesh: about 3 viewers maximum (larger audiences need an SFU).
+- Without a TURN server, some strict networks (symmetric NAT) cannot connect.
+- `/api/info` exposes LAN IPs; the admin API has no lockout (see SECURITY.md).

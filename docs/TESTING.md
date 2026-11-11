@@ -97,4 +97,29 @@ e2e:   17 passed, 0 failed  (35–60 s depending on machine load; run repeatedly
 
 ## 120-minute soak test
 
-SOAK_RESULTS_PLACEHOLDER
+Run once with `SOAK_MINUTES=120 npm run test:soak` (headless Chromium, host and
+viewer in separate browser contexts on one 4-core Linux container, Node 22,
+test canvas source at 30 fps, default "Medium" quality).
+
+| Measure | Result |
+|---|---|
+| Started | 2026-11-11 20:01:25 UTC |
+| Duration | 120 minutes (Playwright: `1 passed (2.0h)`) |
+| Frame checks (every 30 s) | 240 |
+| Stalls (frames did not advance) | **0** |
+| Frames decoded by the viewer | 140,894 |
+| Average received frame rate | 19.6 fps (Medium preset caps at 20 fps) |
+| Renegotiations / ICE restarts needed | 0 |
+| Viewer JS heap, start → end | 3.1 MB → 2.8 MB (no growth, so no leak) |
+| Console errors | 0 |
+
+Raw result line:
+
+```
+SOAK_RESULT {"minutes":120,"checks":240,"stalls":0,"framesDecoded":140894,"avgFps":19.6,"renegotiations":0,"viewerHeapStartMB":3.1,"viewerHeapEndMB":2.8,"consoleErrors":0}
+```
+
+Note: both browsers ran on the same machine, so this proves the app logic
+(timers, peer connection, memory) holds up for 2 hours. It does not test a
+real Wi-Fi network; the network-failure paths are covered by the reconnect
+and ICE-restart e2e tests instead.
