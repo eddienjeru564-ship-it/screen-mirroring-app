@@ -1,10 +1,11 @@
 // Playwright config — spins up dedicated ScreenView servers for the e2e suite.
 //
-// Three servers, each with settings a group of tests needs (ports shift with
+// Four servers, each with settings a group of tests needs (ports shift with
 // E2E_PORT_BASE, default 3100):
 //   3100  main suite (1 viewer max, admin password set, lenient rate limit)
-//   3101  short code expiry (1.5 s) and grace period (2 s) for timeout tests
+//   3101  short code expiry (1.5 s) for the "expired code" test
 //   3102  strict rate limit (3 failures/min) for the brute-force test
+//   3103  short host grace period (2 s) for the "host vanishes" test
 // Logs go to test-results/ so the real logs/sessions.jsonl stays clean.
 
 import { defineConfig } from '@playwright/test';
@@ -61,7 +62,8 @@ export default defineConfig({
   },
   webServer: [
     server(BASE_PORT),
-    server(BASE_PORT + 1, { CODE_EXPIRY_MS: '1500', GRACE_MS: '2000' }),
+    server(BASE_PORT + 1, { CODE_EXPIRY_MS: '1500' }),
     server(BASE_PORT + 2, { RATE_LIMIT_MAX: '3' }),
+    server(BASE_PORT + 3, { GRACE_MS: '2000' }),
   ],
 });

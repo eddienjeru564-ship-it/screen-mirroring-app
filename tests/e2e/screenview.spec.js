@@ -2,7 +2,7 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  MAIN, SHORT_EXPIRY, STRICT_RATE,
+  MAIN, SHORT_EXPIRY, STRICT_RATE, SHORT_GRACE,
   startHost, openViewer, expectLiveVideo, framesDecoded,
 } from './helpers.js';
 
@@ -185,8 +185,8 @@ test('admin rejects a wrong password and lists sessions with the right one', asy
 });
 
 test('host vanishing ends the session after the grace period', async ({ browser }) => {
-  const host = await startHost(browser, SHORT_EXPIRY);
-  const viewer = await openViewer(browser, SHORT_EXPIRY, host.code);
+  const host = await startHost(browser, SHORT_GRACE);
+  const viewer = await openViewer(browser, SHORT_GRACE, host.code);
   await expectLiveVideo(viewer.page);
 
   await host.ctx.close(); // host's tab is gone: no clean "end", just a disconnect
@@ -207,4 +207,49 @@ test('quality preset changes the received resolution, live', async ({ browser })
   await expect.poll(() => viewer.page.evaluate(() => window.screenview.videoWidth), {
     timeout: 15_000,
   }).toBe(1280);
+});
+
+test('every page loads cleanly and the app is installable', async ({ browser }) => {
+  for (const path of ['/', '/host', '/view', '/admin']) {
+    const page = await browser.newPage();
+    const problems = [];
+    page.on('console', (m) => {
+      if (['error', 'warning'].includes(m.type())) problems.push(`${path} console ${m.type()}: ${m.text()}`);
+    });
+    page.on('pageerror', (e) => problems.push(`${path} exception: ${e.message}`));
+    page.on('requestfailed', (r) => problems.push(`${path} request failed: ${r.url()}`));
+    page.on('response', (r) => { if (r.status() >= 400) problems.push(`${path} HTTP ${r.status()}: ${r.url()}`); });
+
+    await page.goto(MAIN + path);
+    await page.waitForLoadState('networkidle');
+    // The service worker registers on every page.
+    expect(await page.evaluate(() => navigator.serviceWorker.ready.then(() => true))).toBe(true);
+
+    if (path === '/') {
+      // Ask Chrome itself whether the web app manifest makes ScreenView installable.
+      const cdp = await page.context().newCDPSession(page);
+      const { installabilityErrors } = await cdp.send('Page.getInstallabilityErrors');
+      // Test browsers run incognito-style, where no app can ever be installed;
+      // that is the only error allowed.
+      const real = installabilityErrors.filter((e) => e.errorId !== 'in-incognito');
+      expect(real).toEqual([]);
+    }
+    expect(problems).toEqual([]);
+    await page.close();
+  }
+});
+
+test('host gets an invite link that opens the viewer with the code filled in', async ({ browser }) => {
+  const host = await startHost(browser);
+  await expect(host.page.locator('#inviteLink')).toHaveValue(/\/view\?code=\d{6}$/);
+  const link = await host.page.locator('#inviteLink').inputValue();
+  expect(link).not.toContain('localhost'); // replaced by the LAN address
+
+  // Open the same link path on the test server and join with one click.
+  const page = await browser.newPage();
+  await page.goto(MAIN + new URL(link).pathname + new URL(link).search + '&test=1');
+  await expect(page.locator('#codeInput')).toHaveValue(host.code);
+  await page.click('#joinBtn');
+  await expectLiveVideo(page);
+  await expect(host.page.locator('.toast', { hasText: 'now watching' })).toBeVisible();
 });

@@ -43,6 +43,9 @@ try {
   await host.goto(`${BASE}/host?test=1`);
   await shot(host, 'host-setup');
   await host.click('#startBtn');
+  // Wait for the server's reply: until then the code box shows a placeholder.
+  await host.locator('#code', { hasText: /^\d{3}-\d{3}$/ }).waitFor();
+  await host.waitForFunction(() => document.getElementById('inviteLink').value.includes('code='));
   const code = (await host.locator('#code').textContent()).trim();
 
   const viewer = await (await browser.newContext(opts)).newPage();
@@ -52,7 +55,7 @@ try {
   await viewer.click('#joinBtn');
   await viewer.waitForFunction(() => window.screenview.framesDecoded > 30);
   await host.locator('#viewerCount', { hasText: '1' }).waitFor();
-  await host.waitForTimeout(1500);
+  await host.waitForTimeout(300); // let the preview paint; the join toast is still showing
   await shot(host, 'host-live');
   await shot(viewer, 'viewer-watching');
 

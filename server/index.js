@@ -6,6 +6,7 @@
 // session lifecycle.
 
 import http from 'node:http';
+import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import express from 'express';
@@ -58,6 +59,19 @@ app.use(express.json());
 app.get('/api/ice-config', (_req, res) => {
   res.json({ iceServers: iceServers(), maxViewers: sessions.maxViewers });
 });
+
+/** This machine's LAN addresses, so the host can give viewers a working link. */
+function lanUrls() {
+  const urls = [];
+  for (const addrs of Object.values(networkInterfaces())) {
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal) urls.push(`http://${a.address}:${PORT}`);
+    }
+  }
+  return urls;
+}
+
+app.get('/api/info', (_req, res) => res.json({ lanUrls: lanUrls() }));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, uptime: process.uptime() }));
 

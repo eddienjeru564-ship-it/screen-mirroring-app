@@ -217,3 +217,44 @@ tr:hover td { background: var(--bg-elev-2); }
 
 footer.note { margin-top: 28px; color: var(--fg-dim); font-size: 13px; line-height: 1.6; }
 .kbd { font-family: var(--mono); background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+
+/* Small buttons (e.g. "Install app" in the top bar) */
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+
+/* A row whose text field stretches and button stays put (invite link) */
+.row.nowrap { flex-wrap: nowrap; }
+.row.nowrap input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 14px; }
+
+/* Keyboard focus is always visible */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Toast notifications */
+#toasts {
+  position: fixed; right: 16px; bottom: 16px; z-index: 50;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-elev); color: var(--fg);
+  border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  border-radius: 10px; padding: 10px 14px; font-size: 14px;
+  box-shadow: var(--shadow); max-width: min(360px, calc(100vw - 32px));
+  animation: toast-in 0.2s ease-out;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.toast.ok { border-left-color: var(--ok); }
+.toast.warn { border-left-color: var(--warn); }
+.toast.err { border-left-color: var(--err); }
+.toast.out { opacity: 0; transform: translateY(6px); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Fullscreen: video fills the screen with no rounded frame */
+.stage:fullscreen { border: 0; border-radius: 0; aspect-ratio: auto; }
+
+/* Installed-app window: a little less top padding (no browser chrome above) */
+@media (display-mode: standalone) { .wrap { padding-top: 20px; } }
+
+/* Respect users who ask for less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

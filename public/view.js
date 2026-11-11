@@ -5,6 +5,7 @@
 // connection only ever answers the host's offers.
 
 import { fetchIceConfig, monitorConnection, stateLabel } from './rtc.js';
+import { toast } from './app.js';
 
 const $ = (id) => document.getElementById(id);
 const socket = io({ reconnection: true, reconnectionDelayMax: 5000 });
@@ -20,6 +21,7 @@ const state = {
   gone: false,
   dataChannelsSeen: 0, // should always stay 0 — asserted by the view-only test
   offersReceived: 0, // increments on every (re)negotiation, incl. ICE restarts
+  interrupted: false, // true between a drop and the next successful connection
 };
 
 // Read-only surface for e2e tests (verifies view-only guarantees).
@@ -123,9 +125,14 @@ function setupPeer() {
 
   state.cleanup = monitorConnection(pc, {
     onState: (s) => setStatus(s),
-    onConnected: hideOverlay,
+    onConnected: () => {
+      hideOverlay();
+      if (state.interrupted) toast('Reconnected.', 'ok');
+      state.interrupted = false;
+    },
     onFailed: () => {
       // The host drives ICE restarts; we just surface the reconnecting state.
+      state.interrupted = true;
       showOverlay('Connection interrupted — reconnecting…');
     },
   });
@@ -166,6 +173,7 @@ socket.on('session:ended', ({ reason }) => showGone(reason));
 // Reconnect handling: rejoin with the saved token, then wait for a fresh offer.
 socket.on('connect', () => {
   if (state.sessionId && state.viewerToken && !state.gone) {
+    state.interrupted = true;
     showOverlay('Reconnecting…');
     socket.emit('viewer:rejoin', {
       sessionId: state.sessionId, viewerId: state.viewerId, viewerToken: state.viewerToken,
@@ -198,10 +206,19 @@ function setStatus(connState) {
   else badge.className = 'badge';
 }
 
-$('fsBtn').addEventListener('click', () => {
+function toggleFullscreen() {
   const stage = $('video').parentElement;
   if (!document.fullscreenElement) stage.requestFullscreen?.().catch(() => {});
   else document.exitFullscreen?.();
+}
+$('fsBtn').addEventListener('click', toggleFullscreen);
+$('video').addEventListener('dblclick', toggleFullscreen);
+document.addEventListener('keydown', (e) => {
+  // "F" toggles fullscreen while watching (but not while typing in a field).
+  if (e.key.toLowerCase() === 'f' && !$('watch').classList.contains('hidden')
+      && !(e.target instanceof HTMLInputElement)) {
+    toggleFullscreen();
+  }
 });
 
 $('leaveBtn').addEventListener('click', () => {

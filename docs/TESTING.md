@@ -8,14 +8,18 @@
 | End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real Socket.io signaling, real WebRTC between them. | `npm run test:e2e` |
 | Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. | `npm run test:soak` |
 
-The e2e config starts three servers with different settings so each scenario
+The e2e config starts four servers with different settings so each scenario
 can be tested quickly:
 
 | Port | Settings | Used by |
 |---|---|---|
 | 3100 | defaults, `MAX_VIEWERS=1`, admin password `test-admin` | most tests, soak |
-| 3101 | `CODE_EXPIRY_MS=1500`, `GRACE_MS=2000` | expired code, host-timeout |
+| 3101 | `CODE_EXPIRY_MS=1500` | expired code |
 | 3102 | `RATE_LIMIT_MAX=3` | brute-force test |
+| 3103 | `GRACE_MS=2000` | host vanishes (grace-period teardown) |
+
+Ports shift with `E2E_PORT_BASE` (e.g. `E2E_PORT_BASE=3300`), so the suite can
+run while a soak test holds the default ports.
 
 Test servers write to `test-results/sessions-<port>.jsonl`, never to the real
 `logs/sessions.jsonl`.

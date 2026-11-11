@@ -4,6 +4,7 @@
 // the screen tracks added sendonly. ICE restarts are host-initiated on failure.
 
 import { fetchIceConfig, applyQuality, monitorConnection, formatElapsed } from './rtc.js';
+import { toast } from './app.js';
 
 const $ = (id) => document.getElementById(id);
 const socket = io({ reconnection: true, reconnectionDelayMax: 5000 });
@@ -113,6 +114,7 @@ $('startBtn').addEventListener('click', async () => {
 });
 
 function showLive(codePretty, hasPassword) {
+  showInviteLink(codePretty.replace(/\D/g, ''));
   $('setup').classList.add('hidden');
   $('ended').classList.add('hidden');
   $('live').classList.remove('hidden');
@@ -183,10 +185,12 @@ function sendSignal(viewerId, data) {
 socket.on('viewer:joined', ({ viewerId }) => {
   if (!state.stream || state.ended) return;
   makePeer(viewerId); // addTrack triggers negotiationneeded -> offer
+  toast('A viewer is now watching.', 'ok');
 });
 
 socket.on('viewer:left', ({ viewerId }) => {
   closePeer(viewerId);
+  if (!state.ended) toast('A viewer disconnected.', 'warn');
 });
 
 socket.on('signal', async ({ from, data }) => {
@@ -228,11 +232,44 @@ socket.on('connect', () => {
 });
 
 // ---------- Controls ----------
-$('copyBtn').addEventListener('click', async () => {
-  const text = $('code').textContent;
-  try { await navigator.clipboard.writeText(text); $('copyBtn').textContent = 'Copied ✓'; }
-  catch { /* clipboard may be blocked */ }
-  setTimeout(() => ($('copyBtn').textContent = 'Copy code'), 1500);
+/**
+ * Build a link the viewer can open directly. When the host is on localhost
+ * (the usual setup), use the server's LAN address instead — a "localhost"
+ * link would point at the viewer's own machine.
+ */
+const inviteOrigin = (async () => {
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return location.origin;
+  try {
+    const { lanUrls } = await (await fetch('/api/info')).json();
+    return lanUrls?.[0] || location.origin;
+  } catch {
+    return location.origin;
+  }
+})(); // started at page load, so it is ready by the time a code exists
+
+async function showInviteLink(code) {
+  $('inviteLink').value = `${await inviteOrigin}/view?code=${code}`;
+}
+
+async function copyText(text, button, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied to clipboard.', 'ok');
+  } catch {
+    toast('Copy failed — select the text and copy it manually.', 'warn');
+    return;
+  }
+  button.textContent = 'Copied ✓';
+  setTimeout(() => (button.textContent = label), 1500);
+}
+
+$('copyBtn').addEventListener('click', () => copyText($('code').textContent, $('copyBtn'), 'Copy code'));
+$('copyLinkBtn').addEventListener('click', () => copyText($('inviteLink').value, $('copyLinkBtn'), 'Copy link'));
+$('inviteLink').addEventListener('focus', (e) => e.target.select());
+
+// Closing or reloading the tab ends the share, so ask first.
+window.addEventListener('beforeunload', (e) => {
+  if (state.stream && !state.ended) e.preventDefault();
 });
 
 $('liveQuality').addEventListener('change', () => {
