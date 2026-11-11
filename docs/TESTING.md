@@ -4,7 +4,7 @@
 
 | Layer | Tool | What it covers | Command |
 |---|---|---|---|
-| Unit | `node --test` | Session/code logic, rate limiter, log writer/reader. Pure functions with an injected clock, so expiry and grace periods are tested in microseconds. | `npm test` |
+| Unit | `node --test` | Session/code logic, rate limiter, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). Pure functions with an injected clock, so expiry and grace periods are tested in microseconds. | `npm test` |
 | End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real Socket.io signaling, real WebRTC between them. | `npm run test:e2e` |
 | Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. | `npm run test:soak` |
 
@@ -85,7 +85,7 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 Latest full run (Chromium, Linux, headless):
 
 ```
-unit:  20 passed, 0 failed
+unit:  24 passed, 0 failed
 e2e:   15 passed, 0 failed  (35–60 s depending on machine load; run repeatedly with no flakes)
 ```
 

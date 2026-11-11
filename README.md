@@ -89,7 +89,7 @@ npm run test:e2e
 SOAK_MINUTES=120 npm run test:soak
 ```
 
-20 unit tests and 15 end-to-end tests; a 120-minute soak run is recorded in
+24 unit tests and 15 end-to-end tests; a 120-minute soak run is recorded in
 [docs/TESTING.md](docs/TESTING.md). `npm run screenshots` regenerates the
 images in `docs/img/`.
 
