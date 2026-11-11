@@ -98,10 +98,9 @@ export class SessionManager {
       return { ok: false, error: dead.reason === 'expired' ? 'expired' : 'ended' };
     }
     if (session.status === 'ended') return { ok: false, error: 'ended' };
-    if (this.isExpired(session)) {
-      this.endSession(session.sessionId, 'expired');
-      return { ok: false, error: 'expired' };
-    }
+    // Expired codes are reported here but ended by sweep(), so the server
+    // logs and announces every ending through one path.
+    if (this.isExpired(session)) return { ok: false, error: 'expired' };
     if (session.password && session.password !== password) {
       return { ok: false, error: 'wrong_password' };
     }

@@ -111,12 +111,22 @@ function pushViewerCount(session) {
   });
 }
 
-/** End a session and tell everyone, then clean up sockets. */
+/** End a session and tell everyone. */
 function teardown(session, reason) {
   if (!session || session.status === 'ended') return;
   sessions.endSession(session.sessionId, reason);
+  announceEnded(session);
+}
+
+/** Log the end of an already-ended session (closing out viewers) and notify the room. */
+function announceEnded(session) {
+  for (const [viewerId, v] of session.viewers) {
+    if (v.connected && sessions.markViewerLeft(session.sessionId, viewerId)) {
+      logger.viewerLeave(session.sessionId, viewerId);
+    }
+  }
   logger.sessionEnd(session);
-  io.to(roomFor(session.sessionId)).emit('session:ended', { reason });
+  io.to(roomFor(session.sessionId)).emit('session:ended', { reason: session.endReason });
 }
 
 io.on('connection', (socket) => {
@@ -286,11 +296,7 @@ function respond(cb, payload) {
 
 // ---- Periodic sweep: expire unused codes, tear down grace-expired hosts ----
 const sweepTimer = setInterval(() => {
-  for (const ended of sessions.sweep()) {
-    const reason = ended.endReason || 'expired';
-    logger.sessionEnd(ended);
-    io.to(roomFor(ended.sessionId)).emit('session:ended', { reason });
-  }
+  for (const ended of sessions.sweep()) announceEnded(ended);
 }, 5_000);
 sweepTimer.unref?.();
 
