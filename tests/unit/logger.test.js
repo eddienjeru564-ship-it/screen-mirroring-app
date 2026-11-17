@@ -31,3 +31,17 @@ test('humanDuration formats', () => {
   assert.equal(humanDuration(5_000), '5s');
   assert.equal(humanDuration(3_725_000), '1h 2m 5s');
 });
+
+test('StoreSink keeps the log in the store (used on Vercel) and folds the same way', async () => {
+  const { MemoryStore } = await import('../../server/store.js');
+  const { StoreSink } = await import('../../server/logger.js');
+  const store = new MemoryStore();
+  const log = new SessionLogger(new StoreSink(store, { max: 3 }));
+  await log.viewerJoin('s1', 'v1');
+  await log.viewerJoin('s1', 'v2');
+  await log.viewerLeave('s1', 'v1');
+  await log.viewerLeave('s1', 'v2'); // cap of 3 drops the oldest event
+  const [sum] = await log.readSessions();
+  assert.equal(sum.viewerJoins, 1);
+  assert.equal(sum.viewerLeaves, 2);
+});

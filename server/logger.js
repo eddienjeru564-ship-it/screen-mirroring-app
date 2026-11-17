@@ -1,33 +1,87 @@
-// logger.js — append-only JSON-lines session audit log.
+// logger.js — append-only session audit log.
 //
-// One JSON object per line in logs/sessions.jsonl. We log discrete events
-// (session_start, viewer_join, viewer_leave, session_end); the admin page
-// reconstructs per-session rows from them. Append-only keeps it tamper-evident
-// and dead simple — no database.
+// We log discrete events (session_start, viewer_join, viewer_leave,
+// session_end); the admin page folds them into per-session rows. Where the
+// events are kept depends on where ScreenView runs:
+//   FileSink   — logs/sessions.jsonl, one JSON object per line (laptop/LAN).
+//   StoreSink  — a capped list in the session store (Vercel has no writable disk).
 
 import { appendFile, readFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export class SessionLogger {
+/** JSON-lines file. Appends are serialised so lines never interleave. */
+export class FileSink {
   constructor(filePath) {
     this.filePath = filePath;
-    this._chain = Promise.resolve(); // serialise appends to avoid interleaving
+    this._chain = Promise.resolve();
   }
 
-  async #ensureDir() {
-    const dir = dirname(this.filePath);
-    if (!existsSync(dir)) await mkdir(dir, { recursive: true });
-  }
-
-  /** Append one event. Never throws into the caller — logging must not break a session. */
-  log(event) {
-    const line = JSON.stringify({ ts: new Date().toISOString(), ...event }) + '\n';
+  append(record) {
+    const line = JSON.stringify(record) + '\n';
     this._chain = this._chain
-      .then(() => this.#ensureDir())
-      .then(() => appendFile(this.filePath, line, 'utf8'))
-      .catch((err) => console.error('[logger] failed to write log line:', err.message));
+      .then(() => mkdir(dirname(this.filePath), { recursive: true }))
+      .then(() => appendFile(this.filePath, line, 'utf8'));
     return this._chain;
+  }
+
+  async readAll() {
+    let text = '';
+    try {
+      text = await readFile(this.filePath, 'utf8');
+    } catch {
+      return [];
+    }
+    const out = [];
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        out.push(JSON.parse(line));
+      } catch {
+        // skip a corrupt line rather than break the admin page
+      }
+    }
+    return out;
+  }
+}
+
+/** Capped list in the store (keeps the newest `max` events). */
+export class StoreSink {
+  constructor(store, { key = 'sv:log', max = 5000 } = {}) {
+    this.store = store;
+    this.key = key;
+    this.max = max;
+  }
+
+  append(record) {
+    return this.store.rpush(this.key, JSON.stringify(record), { max: this.max });
+  }
+
+  async readAll() {
+    const out = [];
+    for (const s of await this.store.lrange(this.key)) {
+      try {
+        out.push(JSON.parse(s));
+      } catch {
+        // skip
+      }
+    }
+    return out;
+  }
+}
+
+export class SessionLogger {
+  /** @param {string | {append: Function, readAll: Function}} sink file path or sink */
+  constructor(sink) {
+    this.sink = typeof sink === 'string' ? new FileSink(sink) : sink;
+  }
+
+  /** Append one event. Never throws — logging must not break a session. */
+  async log(event) {
+    try {
+      await this.sink.append({ ts: new Date().toISOString(), ...event });
+    } catch (err) {
+      console.error('[logger] failed to write log event:', err.message);
+    }
   }
 
   sessionStart(s) {
@@ -35,7 +89,7 @@ export class SessionLogger {
       event: 'session_start',
       sessionId: s.sessionId,
       code: s.code,
-      hasPassword: !!s.password,
+      hasPassword: !!s.hasPassword,
       quality: s.quality,
     });
   }
@@ -60,25 +114,11 @@ export class SessionLogger {
     });
   }
 
-  /** Read the raw log and fold it into per-session summaries, newest first. */
+  /** Fold the raw events into per-session summaries, newest first. */
   async readSessions() {
-    await this.#ensureDir();
-    let text = '';
-    try {
-      text = await readFile(this.filePath, 'utf8');
-    } catch {
-      return [];
-    }
     /** @type {Map<string, object>} */
     const sessions = new Map();
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue;
-      let rec;
-      try {
-        rec = JSON.parse(line);
-      } catch {
-        continue; // skip corrupt lines rather than crash the admin page
-      }
+    for (const rec of await this.sink.readAll()) {
       const id = rec.sessionId;
       if (!id) continue;
       if (!sessions.has(id)) {

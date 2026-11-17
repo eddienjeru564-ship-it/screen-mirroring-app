@@ -6,6 +6,9 @@
 //   3101  short code expiry (1.5 s) for the "expired code" test
 //   3102  strict rate limit (3 failures/min) for the brute-force test
 //   3103  short host grace period (2 s) for the "host vanishes" test
+//   3104  "Vercel mode": VERCEL=1 with an Upstash store (a fake Upstash API on
+//         3110), so sessions, signaling and the log all go through Redis calls
+//   3105  "Vercel mode" with no store configured, to check the clear error
 // Logs go to test-results/ so the real logs/sessions.jsonl stays clean.
 
 import { defineConfig } from '@playwright/test';
@@ -16,6 +19,9 @@ const common = {
   ADMIN_PASSWORD: 'test-admin',
   MAX_VIEWERS: '1',
   GRACE_MS: '60000',
+  // A viewer silent for 3 s counts as gone (default 12 s), so the
+  // reconnect test doesn't have to wait long.
+  VIEWER_STALE_MS: '3000',
 };
 
 function server(port, extraEnv) {
@@ -65,5 +71,16 @@ export default defineConfig({
     server(BASE_PORT + 1, { CODE_EXPIRY_MS: '1500' }),
     server(BASE_PORT + 2, { RATE_LIMIT_MAX: '3' }),
     server(BASE_PORT + 3, { GRACE_MS: '2000' }),
+    {
+      command: `node tests/e2e/fakeUpstashServer.js ${BASE_PORT + 10}`,
+      url: `http://localhost:${BASE_PORT + 10}/`,
+      reuseExistingServer: false,
+    },
+    server(BASE_PORT + 4, {
+      VERCEL: '1',
+      KV_REST_API_URL: `http://localhost:${BASE_PORT + 10}`,
+      KV_REST_API_TOKEN: 'test-token',
+    }),
+    server(BASE_PORT + 5, { VERCEL: '1' }),
   ],
 });

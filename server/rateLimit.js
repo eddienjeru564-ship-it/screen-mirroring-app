@@ -1,59 +1,46 @@
-// rateLimit.js — tiny sliding-window limiter for join-code attempts.
+// rateLimit.js — limits failed join-code attempts per client IP.
 //
-// Keyed by client IP. Only *failed* code attempts are counted, so a legitimate
-// viewer who types the right code is never throttled. Pure logic + injectable
-// clock for unit testing.
+// Fixed window kept in the session store, so it works across serverless
+// instances: the first failure starts a window of `windowMs`; once `max`
+// failures land inside it, further attempts are refused until it expires.
+// Only *failed* attempts count, and a successful join clears the counter, so a
+// viewer who types the right code is never slowed down.
 
 export class RateLimiter {
   /**
    * @param {object} opts
-   * @param {number} opts.max        max failed attempts per window
-   * @param {number} opts.windowMs   window length in ms
-   * @param {() => number} [opts.now]
+   * @param {object} opts.store     MemoryStore or UpstashStore
+   * @param {number} opts.max       max failed attempts per window
+   * @param {number} opts.windowMs  window length in ms
    */
-  constructor({ max = 5, windowMs = 60_000, now = Date.now } = {}) {
+  constructor({ store, max = 5, windowMs = 60_000 }) {
+    this.store = store;
     this.max = max;
     this.windowMs = windowMs;
-    this.now = now;
-    /** @type {Map<string, number[]>} key -> timestamps of recent failures */
-    this.hits = new Map();
   }
 
-  #prune(key, t) {
-    const arr = this.hits.get(key);
-    if (!arr) return [];
-    const cutoff = t - this.windowMs;
-    const kept = arr.filter((ts) => ts > cutoff);
-    if (kept.length) this.hits.set(key, kept);
-    else this.hits.delete(key);
-    return kept;
+  #key(ip) {
+    return `sv:rl:${ip}`;
   }
 
-  /** True if this key is currently over its limit (no state change). */
-  isLimited(key) {
-    const t = this.now();
-    return this.#prune(key, t).length >= this.max;
+  /** True if this IP is currently over its limit (no state change). */
+  async isLimited(ip) {
+    return Number((await this.store.get(this.#key(ip))) || 0) >= this.max;
   }
 
-  /** Record one failed attempt. Returns true if now over the limit. */
-  recordFailure(key) {
-    const t = this.now();
-    const kept = this.#prune(key, t);
-    kept.push(t);
-    this.hits.set(key, kept);
-    return kept.length >= this.max;
+  /** Record one failed attempt. Returns true if now at/over the limit. */
+  async recordFailure(ip) {
+    return (await this.store.incr(this.#key(ip), this.windowMs)) >= this.max;
   }
 
-  /** Clear a key's history (call on a successful join). */
-  reset(key) {
-    this.hits.delete(key);
+  /** Clear an IP's failures (call on a successful join). */
+  async reset(ip) {
+    await this.store.del(this.#key(ip));
   }
 
-  /** How many ms until the key is allowed again (0 if not limited). */
-  retryAfterMs(key) {
-    const arr = this.hits.get(key);
-    if (!arr || arr.length < this.max) return 0;
-    const oldest = arr[arr.length - this.max];
-    return Math.max(0, oldest + this.windowMs - this.now());
+  /** How many ms until the IP may try again (0 if not limited). */
+  async retryAfterMs(ip) {
+    if (!(await this.isLimited(ip))) return 0;
+    return Math.max(0, await this.store.pttl(this.#key(ip)));
   }
 }

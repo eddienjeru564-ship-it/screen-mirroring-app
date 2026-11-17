@@ -16,11 +16,9 @@
     "icons": "node scripts/icons.js"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1"
+    "express": "^4.21.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
-    "socket.io-client": "^4.8.1"
+    "@playwright/test": "^1.49.1"
   }
 }

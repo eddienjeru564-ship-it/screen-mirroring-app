@@ -6,9 +6,9 @@
 
 import { fetchIceConfig, monitorConnection, stateLabel } from './rtc.js';
 import { toast } from './app.js';
+import { call, createPoller, createSender } from './signal.js';
 
 const $ = (id) => document.getElementById(id);
-const socket = io({ reconnection: true, reconnectionDelayMax: 5000 });
 
 const state = {
   sessionId: null,
@@ -22,7 +22,14 @@ const state = {
   dataChannelsSeen: 0, // should always stay 0 — asserted by the view-only test
   offersReceived: 0, // increments on every (re)negotiation, incl. ICE restarts
   interrupted: false, // true between a drop and the next successful connection
+  poller: null,
+  pollFailing: false,
 };
+
+const auth = () => ({
+  sessionId: state.sessionId, viewerId: state.viewerId, viewerToken: state.viewerToken,
+});
+const sendSignal = createSender(() => ({ role: 'viewer', ...auth() }), () => state.poller);
 
 // Read-only surface for e2e tests (verifies view-only guarantees).
 window.screenview = {
@@ -41,7 +48,8 @@ window.screenview = {
 };
 
 if (new URLSearchParams(location.search).get('test') === '1') {
-  window.screenview.dropSignaling = () => socket.io.engine.close();
+  // Simulate the viewer's network dropping for `ms` (no requests at all).
+  window.screenview.dropSignaling = (ms = 3000) => state.poller?.pause(ms);
 }
 
 // ---------- Code input auto-formatting (NNN-NNN) ----------
@@ -66,16 +74,21 @@ async function join() {
   const ice = await fetchIceConfig();
   state.iceServers = ice.iceServers;
 
-  socket.emit('viewer:join', { code, password }, async (res) => {
-    $('joinBtn').disabled = false;
-    if (!res?.ok) return handleJoinError(res?.error, res?.retryAfterMs);
+  let res;
+  try {
+    res = await call('viewer/join', { code, password });
+  } catch {
+    res = { ok: false, error: 'network' };
+  }
+  $('joinBtn').disabled = false;
+  if (!res?.ok) return handleJoinError(res?.error, res?.retryAfterMs);
 
-    state.sessionId = res.sessionId;
-    state.viewerId = res.viewerId;
-    state.viewerToken = res.viewerToken;
-    setupPeer();
-    showWatch();
-  });
+  state.sessionId = res.sessionId;
+  state.viewerId = res.viewerId;
+  state.viewerToken = res.viewerToken;
+  setupPeer();
+  showWatch();
+  state.poller = createPoller('viewer/poll', auth, onPoll, { onError: onPollError });
 }
 
 function handleJoinError(error, retryAfterMs) {
@@ -91,6 +104,9 @@ function handleJoinError(error, retryAfterMs) {
     session_full: 'This session is full — the maximum number of viewers are already watching.',
     rate_limited: `Too many attempts. Wait ${Math.ceil((retryAfterMs || 60000) / 1000)}s and try again.`,
     not_found: 'That session could not be found.',
+    busy: 'The server is busy. Please try again.',
+    network: 'Could not reach the ScreenView server. Check your connection and try again.',
+    storage_not_configured: 'This server is not set up yet (session storage is missing).',
   }[error] || 'Could not join the session. Please try again.';
   showEntryError(msg);
 }
@@ -120,7 +136,7 @@ function setupPeer() {
   });
 
   pc.addEventListener('icecandidate', (e) => {
-    if (e.candidate) socket.emit('signal', { to: 'host', data: { candidate: e.candidate } });
+    if (e.candidate) sendSignal('host', { candidate: e.candidate });
   });
 
   state.cleanup = monitorConnection(pc, {
@@ -144,8 +160,40 @@ function teardownPeer() {
   state.pc = null;
 }
 
-// ---------- Signaling from server ----------
-socket.on('signal', async ({ from, data }) => {
+// ---------- Messages from the server (one poll reply at a time) ----------
+async function onPoll(res) {
+  if (state.gone) return;
+  if (state.pollFailing) {
+    state.pollFailing = false;
+    if (!state.interrupted) hideOverlayIfPlaying();
+  }
+  if (!res.ok) return showGone('ended');
+  if (res.ended) return showGone(res.ended);
+  if (res.rejoined) {
+    // We were away long enough to be counted as gone; the host is re-offering.
+    state.interrupted = true;
+    showOverlay('Reconnecting…');
+    setupPeer();
+  }
+  for (const ev of res.events || []) {
+    if (ev.type === 'signal') await onSignal(ev);
+  }
+}
+
+function onPollError(_err, failures) {
+  // Video keeps flowing peer-to-peer even while signaling is unreachable, so
+  // only mention it if the video has also stopped.
+  if (failures >= 3 && !state.pollFailing) {
+    state.pollFailing = true;
+    if (state.pc?.connectionState !== 'connected') showOverlay('Connection interrupted — reconnecting…');
+  }
+}
+
+function hideOverlayIfPlaying() {
+  if (state.pc?.connectionState === 'connected') hideOverlay();
+}
+
+async function onSignal({ from, data }) {
   if (from?.role !== 'host' || !state.pc) return;
   const pc = state.pc;
   try {
@@ -154,7 +202,7 @@ socket.on('signal', async ({ from, data }) => {
       await pc.setRemoteDescription(data.description); // host's offer (incl. ICE restart)
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket.emit('signal', { to: 'host', data: { description: pc.localDescription } });
+      sendSignal('host', { description: pc.localDescription });
       // Flush any candidates that arrived before the offer.
       for (const c of state.pendingCandidates.splice(0)) {
         try { await pc.addIceCandidate(c); } catch { /* ignore */ }
@@ -166,23 +214,18 @@ socket.on('signal', async ({ from, data }) => {
   } catch (err) {
     console.warn('viewer signal apply failed:', err?.message);
   }
-});
+}
 
-socket.on('session:ended', ({ reason }) => showGone(reason));
-
-// Reconnect handling: rejoin with the saved token, then wait for a fresh offer.
-socket.on('connect', () => {
-  if (state.sessionId && state.viewerToken && !state.gone) {
-    state.interrupted = true;
-    showOverlay('Reconnecting…');
-    socket.emit('viewer:rejoin', {
-      sessionId: state.sessionId, viewerId: state.viewerId, viewerToken: state.viewerToken,
-    }, (res) => {
-      if (res?.ok) setupPeer(); // host will re-offer
-      else showGone('ended');
-    });
+/** Tell the server we left, even while the page is closing. */
+function sendLeave() {
+  if (!state.sessionId || state.leaveSent) return;
+  state.leaveSent = true;
+  const body = JSON.stringify(auth());
+  if (!navigator.sendBeacon?.('/api/viewer/leave', body)) {
+    fetch('/api/viewer/leave', { method: 'POST', body, keepalive: true }).catch(() => {});
   }
-});
+}
+window.addEventListener('pagehide', () => { if (!state.gone) sendLeave(); });
 
 // ---------- UI ----------
 function showWatch() {
@@ -222,14 +265,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 $('leaveBtn').addEventListener('click', () => {
-  state.gone = true;
-  teardownPeer();
-  socket.disconnect();
+  sendLeave();
   showGone('left');
 });
 
 function showGone(reason) {
   state.gone = true;
+  state.poller?.stop();
   teardownPeer();
   $('watch').classList.add('hidden');
   $('entry').classList.add('hidden');

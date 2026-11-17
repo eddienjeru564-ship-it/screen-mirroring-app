@@ -71,7 +71,7 @@ test('host stopping the capture track ends the session', async ({ browser }) => 
     t.stop();
     t.dispatchEvent(new Event('ended'));
   });
-  await expect(viewer.page.locator('#goneTitle')).toHaveText('Session ended');
+  await expect(viewer.page.locator('#goneTitle')).toHaveText('Sharing stopped');
 });
 
 test('stream resumes after a signaling drop on both sides, no code re-entry', async ({ browser }) => {
@@ -80,9 +80,12 @@ test('stream resumes after a signaling drop on both sides, no code re-entry', as
   await expectLiveVideo(viewer.page);
   const offersBefore = await viewer.page.evaluate(() => window.screenview.offersReceived);
 
-  // Kill both Socket.io transports; they auto-reconnect and rejoin.
-  await viewer.page.evaluate(() => window.screenview.dropSignaling());
-  await host.page.evaluate(() => window.screenview.dropSignaling());
+  // Both sides lose signaling: the host for 3 s (inside its grace period), the
+  // viewer for 4.5 s (longer than VIEWER_STALE_MS, so the server counts it as
+  // gone). When they come back the viewer is re-admitted with its token and
+  // the host sends a fresh offer.
+  await viewer.page.evaluate(() => window.screenview.dropSignaling(4500));
+  await host.page.evaluate(() => window.screenview.dropSignaling(3000));
 
   await expect.poll(() => viewer.page.evaluate(() => window.screenview.offersReceived), {
     timeout: 20_000,
@@ -190,7 +193,7 @@ test('host vanishing ends the session after the grace period', async ({ browser 
   await expectLiveVideo(viewer.page);
 
   await host.ctx.close(); // host's tab is gone: no clean "end", just a disconnect
-  // Server GRACE_MS is 2 s and sweeps every 5 s.
+  // Server GRACE_MS is 2 s; the viewer's next poll after that sees the timeout.
   await expect(viewer.page.locator('#goneTitle')).toHaveText('Host disconnected', { timeout: 15_000 });
 });
 

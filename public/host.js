@@ -5,9 +5,9 @@
 
 import { fetchIceConfig, applyQuality, monitorConnection, formatElapsed } from './rtc.js';
 import { toast } from './app.js';
+import { call, createPoller, createSender } from './signal.js';
 
 const $ = (id) => document.getElementById(id);
-const socket = io({ reconnection: true, reconnectionDelayMax: 5000 });
 
 const state = {
   sessionId: null,
@@ -19,7 +19,11 @@ const state = {
   /** @type {Map<string, {pc: RTCPeerConnection, cleanup: Function}>} */
   peers: new Map(),
   ended: false,
+  poller: null,
 };
+
+const auth = () => ({ sessionId: state.sessionId, hostToken: state.hostToken });
+const sendSignal = createSender(() => ({ role: 'host', ...auth() }), () => state.poller);
 
 // Expose a tiny read-only surface for e2e tests / debugging status.
 window.screenview = {
@@ -32,7 +36,8 @@ window.screenview = {
 // Test-only hooks (?test=1) used by the e2e reconnect tests. Not reachable in
 // normal use.
 if (new URLSearchParams(location.search).get('test') === '1') {
-  window.screenview.dropSignaling = () => socket.io.engine.close();
+  // Simulate the host's network dropping for `ms` (no requests at all).
+  window.screenview.dropSignaling = (ms = 3000) => state.poller?.pause(ms);
   window.screenview.forceIceRestart = () => {
     for (const { pc } of state.peers.values()) pc.restartIce();
   };
@@ -100,17 +105,26 @@ $('startBtn').addEventListener('click', async () => {
     endSession('host_stopped_sharing');
   });
 
-  socket.emit('host:create', { quality: state.quality, password: password || null }, (res) => {
-    if (!res?.ok) {
-      $('setupError').textContent = 'Server rejected the session. Please retry.';
-      $('setupError').classList.remove('hidden');
-      $('startBtn').disabled = false;
-      return;
-    }
-    state.sessionId = res.sessionId;
-    state.hostToken = res.hostToken;
-    showLive(res.codePretty, !!res.hasPassword);
-  });
+  let res;
+  try {
+    res = await call('host/create', { quality: state.quality, password: password || null });
+  } catch {
+    res = null;
+  }
+  if (!res?.ok) {
+    for (const t of state.stream.getTracks()) t.stop();
+    state.stream = null;
+    $('setupError').textContent = res?.error === 'storage_not_configured'
+      ? 'This server is not set up yet: its session storage (Redis) is missing. See the README.'
+      : 'Could not reach the ScreenView server. Check your connection and try again.';
+    $('setupError').classList.remove('hidden');
+    $('startBtn').disabled = false;
+    return;
+  }
+  state.sessionId = res.sessionId;
+  state.hostToken = res.hostToken;
+  showLive(res.codePretty, !!res.hasPassword);
+  state.poller = createPoller('host/poll', auth, onPoll);
 });
 
 function showLive(codePretty, hasPassword) {
@@ -177,23 +191,37 @@ function closePeer(viewerId) {
   state.peers.delete(viewerId);
 }
 
-function sendSignal(viewerId, data) {
-  socket.emit('signal', { to: viewerId, data });
+// ---------- Messages from the server (one poll reply at a time) ----------
+let lastCount = -1;
+
+async function onPoll(res) {
+  if (state.ended) return;
+  if (!res.ok) return showEnded('ended'); // session no longer exists
+  if (res.ended) return showEnded(res.ended);
+  for (const ev of res.events || []) {
+    if (ev.type === 'viewer:joined') onViewerJoined(ev);
+    else if (ev.type === 'viewer:left') onViewerLeft(ev);
+    else if (ev.type === 'signal') await onSignal(ev);
+  }
+  if (res.viewers !== lastCount) {
+    lastCount = res.viewers;
+    showViewerCount(res.viewers);
+  }
 }
 
-// ---------- Signaling from server ----------
-socket.on('viewer:joined', ({ viewerId }) => {
+function onViewerJoined({ viewerId, rejoin }) {
   if (!state.stream || state.ended) return;
   makePeer(viewerId); // addTrack triggers negotiationneeded -> offer
-  toast('A viewer is now watching.', 'ok');
-});
+  toast(rejoin ? 'A viewer reconnected.' : 'A viewer is now watching.', 'ok');
+}
 
-socket.on('viewer:left', ({ viewerId }) => {
+function onViewerLeft({ viewerId }) {
+  if (!state.peers.has(viewerId)) return;
   closePeer(viewerId);
   if (!state.ended) toast('A viewer disconnected.', 'warn');
-});
+}
 
-socket.on('signal', async ({ from, data }) => {
+async function onSignal({ from, data }) {
   if (from?.role !== 'viewer') return;
   const entry = state.peers.get(from.viewerId);
   if (!entry) return;
@@ -207,29 +235,13 @@ socket.on('signal', async ({ from, data }) => {
   } catch (err) {
     console.warn('host signal apply failed:', err?.message);
   }
-});
+}
 
-socket.on('session:viewers', ({ count }) => {
+function showViewerCount(count) {
   $('viewerCount').textContent = String(count);
   if (count > 0) setConn('ok', count === 1 ? '1 viewer connected' : `${count} viewers connected`);
   else setConn('', 'Waiting for viewer…');
-});
-
-socket.on('session:ended', ({ reason }) => showEnded(reason));
-
-// Reconnect: Socket.io reconnected us with a new socket id. Re-announce.
-socket.on('connect', () => {
-  if (state.sessionId && state.hostToken && state.stream && !state.ended) {
-    socket.emit('host:rejoin', { sessionId: state.sessionId, hostToken: state.hostToken }, (res) => {
-      if (res?.ok) {
-        // Re-offer to every viewer the server still knows about.
-        for (const viewerId of res.viewers || []) makePeer(viewerId);
-      } else {
-        showEnded('expired');
-      }
-    });
-  }
-});
+}
 
 // ---------- Controls ----------
 /**
@@ -274,7 +286,7 @@ window.addEventListener('beforeunload', (e) => {
 
 $('liveQuality').addEventListener('change', () => {
   state.quality = $('liveQuality').value;
-  socket.emit('host:quality', { quality: state.quality });
+  call('host/quality', { ...auth(), quality: state.quality }).catch(() => {});
   for (const { pc } of state.peers.values()) {
     const s = pc.getSenders().find((x) => x.track && x.track.kind === 'video');
     applyQuality(s, state.quality);
@@ -285,13 +297,14 @@ $('endBtn').addEventListener('click', () => endSession('host_ended'));
 
 function endSession(reason) {
   if (state.ended) return;
-  socket.emit('host:end', {}, () => {});
+  if (state.sessionId) call('host/end', { ...auth(), reason }).catch(() => {});
   showEnded(reason);
 }
 
 function showEnded(reason) {
   if (state.ended) return;
   state.ended = true;
+  state.poller?.stop();
   for (const id of [...state.peers.keys()]) closePeer(id);
   if (state.stream) {
     for (const t of state.stream.getTracks()) t.stop();
