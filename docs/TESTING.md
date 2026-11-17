@@ -107,7 +107,31 @@ e2e:   17 passed, 0 failed  (35–60 s depending on machine load; run repeatedly
 
 ### Run 2: current version, Vercel mode over Redis
 
-SOAK2_PLACEHOLDER
+Run with `SOAK_TARGET=vercel SOAK_MINUTES=120 npm run test:soak`: the server
+runs exactly as on Vercel (`VERCEL=1`, HTTPS polling for signaling, all session
+state in Redis through the Upstash REST client), pointed at the local fake
+Upstash server. Same machine and browser setup as Run 1.
+
+| Measure | Result |
+|---|---|
+| Started | 2026-11-17 08:58:10 UTC |
+| Duration | 120 minutes (Playwright: `1 passed (2.0h)`) |
+| Frame checks (every 30 s) | 240 |
+| Stalls (frames did not advance) | **0** |
+| Frames decoded by the viewer | 143,387 |
+| Average received frame rate | 19.9 fps (Medium preset caps at 20 fps) |
+| Renegotiations / ICE restarts needed | 0 |
+| Viewer JS heap, start → end | 2.7 MB → 2.5 MB (no growth, so no leak) |
+| Console errors | 0 |
+
+Raw result line:
+
+```
+SOAK_RESULT {"minutes":120,"target":"vercel-mode (Redis REST store)","checks":240,"stalls":0,"framesDecoded":143387,"avgFps":19.9,"renegotiations":0,"viewerHeapStartMB":2.7,"viewerHeapEndMB":2.5,"consoleErrors":0}
+```
+
+This shows two hours of continuous polling against the Redis store with no
+leaks, no lost signaling and no stalls.
 
 ### Run 1: first version (Socket.io signaling, before the Vercel rework)
 
