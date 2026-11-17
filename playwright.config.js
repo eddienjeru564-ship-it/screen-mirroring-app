@@ -43,7 +43,11 @@ function server(port, extraEnv) {
 export default defineConfig({
   testDir: 'tests/e2e',
   // The soak test only runs via `npm run test:soak` (see package.json).
-  testIgnore: process.env.SOAK ? [] : ['**/soak.spec.js'],
+  // The live check only runs against a deployment (LIVE_URL); it then needs
+  // no local servers.
+  testIgnore: process.env.LIVE_URL
+    ? ['**/screenview.spec.js', '**/vercel-mode.spec.js', '**/soak.spec.js']
+    : [process.env.SOAK ? null : '**/soak.spec.js', '**/live.spec.js'].filter(Boolean),
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -66,7 +70,7 @@ export default defineConfig({
       ],
     },
   },
-  webServer: [
+  webServer: process.env.LIVE_URL ? [] : [
     server(BASE_PORT),
     server(BASE_PORT + 1, { CODE_EXPIRY_MS: '1500' }),
     server(BASE_PORT + 2, { RATE_LIMIT_MAX: '3' }),

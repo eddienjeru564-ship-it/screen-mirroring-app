@@ -6,7 +6,8 @@
 |---|---|---|---|
 | Unit | `node --test` | Session/code logic, signaling relay rules, presence and rejoin, rate limiter, both stores, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). An injected clock tests expiry and grace periods in microseconds. **Every store and session test runs twice: on the memory store and on the Upstash store against a fake Upstash REST API** (`tests/unit/fakeUpstash.js`), so the Redis command encoding used on Vercel is tested too. | `npm test` |
 | End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real HTTP signaling, real WebRTC between them. Includes a suite that runs the app in **Vercel mode** (`VERCEL=1`, Upstash store over HTTP). | `npm run test:e2e` |
-| Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. | `npm run test:soak` |
+| Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. `SOAK_TARGET=vercel` runs it in Vercel mode. | `npm run test:soak` |
+| Live | Playwright | A real deployment: health/storage, clean pages, full session incl. a 14 s signaling outage + rejoin, session full, ended code. | `LIVE_URL=https://… npm run test:live` |
 
 The e2e config starts these servers with different settings so each scenario
 can be tested quickly (all use `VIEWER_STALE_MS=3000` so the reconnect test is
