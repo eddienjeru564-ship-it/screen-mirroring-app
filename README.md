@@ -35,6 +35,14 @@ Nothing to install for either person.
 Requires Node.js 22 LTS or newer.
 
 ```bash
+git clone https://github.com/eddienjeru564-ship-it/screen-mirroring-app.git
+```
+
+```bash
+cd screen-mirroring-app
+```
+
+```bash
 npm install
 ```
 
