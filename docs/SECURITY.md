@@ -14,10 +14,10 @@ pieces needed for control do not exist anywhere in the code:
   from viewers: SDP answers and ICE candidates. There is no handler that could
   move a mouse or press a key. A web page cannot control the operating system
   anyway, even if it wanted to.
-- **The server only relays signaling.** The `signal` handler forwards
-  `description`/`candidate` objects between one host and its own viewers. It
-  checks that the sender belongs to that session; a viewer can only send to its
-  own host.
+- **The server only relays signaling.** The `/api/signal` endpoint forwards
+  only `description`/`candidate` objects (anything else in a message is
+  dropped) between one host and its own viewers. Every request must carry the
+  sender's secret token; a viewer can only ever reach its own host.
 
 The e2e test *"viewer is view-only"* checks this on a live session: zero data
 channels, zero outgoing tracks, no `m=application` section in the SDP, and
@@ -51,6 +51,9 @@ rather than by size alone.
 Each IP gets **5 failed join attempts per minute** (`RATE_LIMIT_MAX`,
 `RATE_LIMIT_WINDOW_MS`). Wrong codes, wrong passwords, expired and ended codes
 all count. A correct join clears the counter, so real users are not slowed down.
+The counter lives in the store (Redis on Vercel), so it holds across serverless
+instances. On Vercel the client IP comes from the `X-Forwarded-For` header that
+Vercel's edge sets itself.
 
 Rough estimate: with ~10 active sessions, one IP at 5 guesses/min has about a
 5 × 10 / 1,000,000 = 0.005 % chance per minute, or roughly 0.5 % over 10 minutes.
@@ -61,9 +64,16 @@ if the real viewer has already joined).
 ## 5. Optional session password
 
 The host can set a password. The viewer then needs both the code and the
-password. The password is kept only in server memory for the life of the
-session, is never written to the log (the log records only `hasPassword`), and
-is compared on the server.
+password. The server stores only a SHA-256 hash of it, for the life of the
+session (memory locally, Redis on Vercel), compares hashes in constant time,
+and never writes it to the log (the log records only `hasPassword`).
+
+## 5a. Session tokens
+
+The host and each viewer receive a random token (`crypto.randomUUID`) when
+they create or join a session. Every poll, signal and end request must present
+it, and tokens are compared in constant time. Knowing a session's code or ID is
+not enough to read its signaling or end it.
 
 ## 6. TURN credentials
 
@@ -74,17 +84,26 @@ server, so `/api/ice-config` does send them to clients. For a public deployment,
 use short-lived TURN credentials (e.g. coturn's REST-API shared-secret mode) so
 a leaked credential expires quickly.
 
+## 6a. Redis credentials (Vercel)
+
+On Vercel, session state lives in Upstash Redis. Its REST URL and token are
+set as environment variables by Vercel's Upstash integration and are used
+only by the server function; they never reach the browser. Everything in Redis
+expires on its own (sessions after at most 12 hours, dead codes after 1 hour).
+
 ## 7. Media encryption
 
 WebRTC encrypts all media with DTLS-SRTP; this cannot be turned off. Video goes
 browser-to-browser (or through TURN, which only sees encrypted packets). The
 signaling server never sees video. For deployment beyond a LAN, put the server
 behind HTTPS: browsers require a secure context for `getDisplayMedia` anyway
-(`localhost` is the exception used during development).
+(`localhost` is the exception used during development). Vercel serves
+everything over HTTPS (with HSTS) automatically.
 
 ## 8. What is logged
 
-`logs/sessions.jsonl`, one JSON object per line:
+`logs/sessions.jsonl`, one JSON object per line (on Vercel, which has no
+writable disk, the same events go to a Redis list capped at the newest 5000):
 
 | Event | Fields |
 |---|---|
@@ -103,9 +122,12 @@ is disabled (HTTP 503) rather than open. Table cells are filled with
 
 ## 10. Known limitations
 
-- Sessions live in memory. If the server process restarts, active sessions are
-  lost; the host must start a new one. (Socket drops and network changes are
-  handled; a full server restart is not.)
+- Running locally, sessions live in memory: if the server process restarts,
+  active sessions are lost and the host must start a new one. On Vercel they
+  live in Redis, so redeploys and new function instances do not affect them.
+- Without background timers, a session whose host *and* viewers all vanish is
+  only marked ended when something next touches it; its keys still expire
+  (12 h), but the admin table may show it without an end time.
 - The admin password is compared directly, with no lockout on the admin API.
   Use a long password and HTTPS.
 - Rate limiting is per IP. Many viewers behind one NAT share a budget, and an

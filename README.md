@@ -7,6 +7,9 @@ A **host** clicks *Start sharing*, picks a screen, and gets a code like
 The viewer can never control the host: there is no control channel at all.
 Nothing to install for either person.
 
+**Live:** <https://screenview-share.vercel.app> (hosted on Vercel; see
+[Deploying to Vercel](#deploying-to-vercel)).
+
 ![Host sharing](docs/img/host-live.png)
 ![Viewer watching](docs/img/viewer-watching.png)
 
@@ -16,14 +19,18 @@ Nothing to install for either person.
   ended codes never work again
 - Peer-to-peer WebRTC video; the server only relays signaling
 - View-only by design: viewer is `recvonly`, no data channel (tested)
-- Built for long sessions: automatic ICE restart, Socket.io auto-reconnect with
-  automatic rejoin (no re-entering the code), 60 s grace period for the host
+- Built for long sessions: automatic ICE restart, signaling that quietly retries
+  and re-admits a dropped viewer automatically (no re-entering the code),
+  60 s grace period for the host
+- Runs on a laptop (`npm start`) **or** on Vercel's serverless platform, from the
+  same code
 - Host dashboard: code, viewer count, session timer, live quality switch, End
   session; the browser's own "Stop sharing" button also ends the session
 - Viewer: auto-formatted code box, clear error messages, fullscreen,
   connection badge, reconnecting overlay
 - Optional session password, brute-force rate limiting, Low/Medium/High quality
-- Session log (`logs/sessions.jsonl`) and a password-protected `/admin` page
+- Session log (`logs/sessions.jsonl` locally, Redis on Vercel) and a
+  password-protected `/admin` page
 - **Installable as an app** (Chrome/Edge "Install app" button): opens in its own
   window with its own icon, no app store or installer needed
 - One-click **invite link** for the viewer that uses the host's network address
@@ -59,8 +66,32 @@ npm start
 > Browsers only allow screen *capture* on `localhost` or over **HTTPS**, which
 > is why the host uses `localhost`. Watching works over plain HTTP. To run the
 > server somewhere else (a school server, the cloud), put it behind HTTPS, e.g.
-> with a reverse proxy such as Caddy, and configure TURN for viewers outside
-> the LAN.
+> with a reverse proxy such as Caddy, or use Vercel (below), which is HTTPS
+> already. Configure TURN for viewers on very restrictive networks.
+
+## Deploying to Vercel
+
+The repository deploys to Vercel as-is: `vercel.json` serves `public/` from
+Vercel's CDN and runs the API (`api/index.js`) as a serverless function.
+
+Vercel may run each request on a different server instance, so live sessions
+cannot be kept in memory there. ScreenView keeps them in an **Upstash Redis**
+database instead (the free plan is plenty):
+
+1. Import the GitHub repository in Vercel (Framework preset: **Other**).
+2. In the project, open **Storage → Create Database → Upstash for Redis**, pick
+   the Free plan, and connect it to the project. This sets `KV_REST_API_URL`
+   and `KV_REST_API_TOKEN` for you.
+3. Optionally set `ADMIN_PASSWORD` under **Settings → Environment Variables**.
+4. Redeploy. <code>https://&lt;your-project&gt;.vercel.app/api/health</code> should say
+   `"storageConfigured": true`.
+
+Without step 2 the site still loads, but starting a session shows a clear
+"session storage is missing" message instead of failing randomly.
+
+Each active session makes roughly 1–2 small Redis requests per second while
+idle (more while a connection is being set up). Upstash's free tier covers
+many demo sessions per month; long all-day use needs a paid plan.
 
 ## Configuration
 
@@ -72,11 +103,13 @@ All settings are optional environment variables (see `.env.example`).
 | `ADMIN_PASSWORD` | *(unset)* | Enables `/admin`; disabled when unset |
 | `CODE_EXPIRY_MS` | `600000` | Lifetime of an unused code (10 min) |
 | `GRACE_MS` | `60000` | How long a session survives a host disconnect |
+| `VIEWER_STALE_MS` | `12000` | A viewer silent this long counts as gone (it is re-admitted automatically when it returns) |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | *(unset)* | Upstash Redis REST credentials. Required on Vercel; optional locally (memory is used without them) |
 | `MAX_VIEWERS` | `1` | Viewers per session (1–3) |
 | `RATE_LIMIT_MAX` | `5` | Failed join attempts allowed per IP… |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | …per this window |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | *(unset)* | Optional TURN server; STUN-only without it |
-| `LOG_FILE` | `logs/sessions.jsonl` | Session log location |
+| `LOG_FILE` | `logs/sessions.jsonl` | Session log location (local only; on Vercel the log is kept in Redis) |
 
 Example:
 
@@ -109,8 +142,11 @@ images in `docs/img/`; `npm run icons` regenerates the app icons.
 ## Project layout
 
 ```
-server/   index.js (Express + Socket.io), sessions.js, rateLimit.js, logger.js
-public/   index/host/view/admin pages, rtc.js (shared WebRTC helpers), app.js
+server/   app.js (the HTTP API), index.js (local server), sessions.js,
+          store.js (memory / Upstash Redis), rateLimit.js, logger.js
+api/      index.js (Vercel function entry; vercel.json routes /api/* to it)
+public/   index/host/view/admin pages, rtc.js (shared WebRTC helpers),
+          signal.js (HTTPS signaling client), app.js
           (install + toasts), sw.js (service worker), manifest.webmanifest, icons/
 tests/    unit/ (node --test), e2e/ (Playwright, incl. soak.spec.js)
 docs/     ARCHITECTURE, SECURITY, TESTING, USER_GUIDE, img/

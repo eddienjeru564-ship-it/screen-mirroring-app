@@ -4,12 +4,13 @@
 
 | Layer | Tool | What it covers | Command |
 |---|---|---|---|
-| Unit | `node --test` | Session/code logic, rate limiter, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). Pure functions with an injected clock, so expiry and grace periods are tested in microseconds. | `npm test` |
-| End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real Socket.io signaling, real WebRTC between them. | `npm run test:e2e` |
+| Unit | `node --test` | Session/code logic, signaling relay rules, presence and rejoin, rate limiter, both stores, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). An injected clock tests expiry and grace periods in microseconds. **Every store and session test runs twice: on the memory store and on the Upstash store against a fake Upstash REST API** (`tests/unit/fakeUpstash.js`), so the Redis command encoding used on Vercel is tested too. | `npm test` |
+| End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real HTTP signaling, real WebRTC between them. Includes a suite that runs the app in **Vercel mode** (`VERCEL=1`, Upstash store over HTTP). | `npm run test:e2e` |
 | Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. | `npm run test:soak` |
 
-The e2e config starts four servers with different settings so each scenario
-can be tested quickly:
+The e2e config starts these servers with different settings so each scenario
+can be tested quickly (all use `VIEWER_STALE_MS=3000` so the reconnect test is
+short):
 
 | Port | Settings | Used by |
 |---|---|---|
@@ -17,6 +18,9 @@ can be tested quickly:
 | 3101 | `CODE_EXPIRY_MS=1500` | expired code |
 | 3102 | `RATE_LIMIT_MAX=3` | brute-force test |
 | 3103 | `GRACE_MS=2000` | host vanishes (grace-period teardown) |
+| 3104 | `VERCEL=1` + Upstash store pointing at the fake Upstash API on 3110 | Vercel-mode tests, Vercel-mode soak |
+| 3105 | `VERCEL=1`, no store | "storage missing" error test |
+| 3110 | fake Upstash REST API (`tests/e2e/fakeUpstashServer.js`) | backs 3104 |
 
 Ports shift with `E2E_PORT_BASE` (e.g. `E2E_PORT_BASE=3300`), so the suite can
 run while a soak test holds the default ports.
@@ -47,8 +51,8 @@ encoding, network, decoding — is the real production code path.
 Without `?test=1` the page always uses the real `getDisplayMedia()`.
 
 `?test=1` also exposes two hooks that the reconnect tests need:
-`window.screenview.dropSignaling()` (closes the Socket.io transport, as a
-network blip would) and, on the host, `forceIceRestart()` (calls
+`window.screenview.dropSignaling(ms)` (stops all signaling requests for `ms`,
+as a network outage would) and, on the host, `forceIceRestart()` (calls
 `pc.restartIce()`).
 
 "Frames advancing" is measured with
@@ -74,8 +78,8 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 4 | expired code | "expired" error after 1.5 s |
 | 5 | session full | 2nd viewer gets "full" |
 | 6 | host ends session | viewer sees "Session ended"; code no longer works |
-| 7 | browser "Stop sharing" | track `ended` ends the session for the viewer |
-| 8 | signaling drop | both sockets dropped → rejoin → new offer → frames resume, viewer never returns to code entry |
+| 7 | browser "Stop sharing" | track `ended` ends the session; viewer sees "Sharing stopped" |
+| 8 | signaling drop | host offline 3 s, viewer offline 4.5 s (longer than `VIEWER_STALE_MS`, so it is counted as gone) → viewer re-admitted by token → new offer → frames resume, viewer never returns to code entry |
 | 9 | ICE restart | `restartIce()` → new offer → frames keep advancing |
 | 10 | view-only | 0 data channels, 0 outgoing tracks, no `m=application`, all media `recvonly` |
 | 11 | password | missing/wrong password rejected; right one works |
@@ -85,6 +89,9 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 15 | quality presets | Low → viewer receives 640 px wide; switching to High live → 1280 px |
 | 16 | clean pages + installable | `/`, `/host`, `/view`, `/admin`: zero console errors **or warnings**, zero failed or 4xx/5xx requests, service worker registers; Chrome's own `Page.getInstallabilityErrors` reports no manifest problems |
 | 17 | invite link | link uses the LAN address (not `localhost`), opens the viewer with the code filled in, joins, host gets a "now watching" notification |
+| 18 | Vercel mode: full session | health reports the Upstash store; live video; invite link uses the site's own address; viewer offline 4.5 s → rejoins without the code; host ends; zero console errors; admin log read back from Redis |
+| 19 | Vercel mode: limits | session full, and the ended code is refused, across independent requests |
+| 20 | Vercel mode without storage | host sees a clear "session storage (Redis) is missing" message instead of a half-working site |
 
 ## Results
 
@@ -95,7 +102,13 @@ unit:  24 passed, 0 failed
 e2e:   17 passed, 0 failed  (35–60 s depending on machine load; run repeatedly with no flakes)
 ```
 
-## 120-minute soak test
+## 120-minute soak tests
+
+### Run 2: current version, Vercel mode over Redis
+
+SOAK2_PLACEHOLDER
+
+### Run 1: first version (Socket.io signaling, before the Vercel rework)
 
 Run once with `SOAK_MINUTES=120 npm run test:soak` (headless Chromium, host and
 viewer in separate browser contexts on one 4-core Linux container, Node 22,

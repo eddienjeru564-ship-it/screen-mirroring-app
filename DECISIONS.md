@@ -139,3 +139,47 @@ aware they are sharing.
   address might not be the one the viewer can reach; the code still works.
 - **Leaving the host page asks for confirmation** while sharing, because closing
   the tab ends the session for the viewer.
+
+## Vercel deployment (follow-up request: "put on vercel")
+
+- **Problem.** Vercel runs server code as serverless functions. Requests can
+  land on different instances, instances freeze between requests, and a
+  connection can't stay open for a 2-hour session. The first version kept
+  sessions in one process's memory and used long-lived Socket.io connections,
+  so on Vercel a viewer could randomly get "invalid code" or lose the session.
+  The user chose to rework it for Vercel with a free Redis database (over
+  hosting the unchanged server elsewhere, or deploying as-is and accepting
+  random failures).
+- **Store.** All state moved into a small async store interface: `MemoryStore`
+  (laptop, tests, zero config) and `UpstashStore` (Redis via Upstash's REST
+  API, using `fetch`, so no new dependency and no TCP connection that a frozen
+  function would leave dangling). Vercel's Upstash integration provides
+  `KV_REST_API_URL`/`KV_REST_API_TOKEN`; `UPSTASH_REDIS_REST_*` also work.
+- **Signaling over HTTPS polling instead of WebSockets.** Vercel can now
+  upgrade WebSockets in functions, but each instance would only know its own
+  sockets (host and viewer could be on different ones), connections close at
+  the function's maximum duration, and relaying between instances would need
+  Redis pub/sub on top. Polling is simpler and robust: 300 ms while
+  connecting (joins still take ~1–2 s), ~2 s when idle, which is fine because
+  an established WebRTC connection needs no signaling at all.
+- **Mailboxes.** Each participant has a Redis list; a poll reads and deletes
+  it in one MULTI/EXEC, so a message can't be lost or delivered twice.
+- **No timers.** Expiry, host timeout and viewer presence are evaluated on each
+  request that touches the session; every key has its own TTL. The first
+  ending is recorded with `SET NX` so concurrent endings can't disagree.
+- **Joins take a short lock** (`SET NX PX 5000`) so two simultaneous viewers
+  can't both take the last seat.
+- **Passwords are stored as SHA-256 hashes** now that they sit in an external
+  database; tokens and hashes are compared in constant time.
+- **On Vercel without Redis the API refuses** session requests with
+  `storage_not_configured` and the host page explains it, rather than appearing
+  to work and failing randomly.
+- **The log** goes to a capped Redis list on Vercel (no writable disk) and to
+  `logs/sessions.jsonl` locally, as before.
+- **"Stop sharing" now reports its own reason** to viewers ("Sharing stopped")
+  instead of the generic "Session ended"; the e2e test was updated to match.
+- **Deployment protection.** Vercel turns on "Vercel Authentication" for new
+  projects, which would make viewers log in to Vercel. It was limited to
+  preview deployments, so the production site is public.
+- **Domain.** `screen-mirroring-app.vercel.app` was taken by another account,
+  so the production domain is `screenview-share.vercel.app`.

@@ -45,9 +45,19 @@ written. The test that verifies each item is named where there is one.
 - [x] F / double-click fullscreen; confirm before closing the host tab
 - [x] Visible keyboard focus; reduced-motion support
 
+## Vercel deployment (follow-up)
+- [x] Store abstraction: memory locally, Upstash Redis on Vercel — unit tests on both
+- [x] Signaling moved from Socket.io to HTTPS polling (works across serverless instances)
+- [x] `api/index.js` + `vercel.json`; Vercel project linked to the GitHub repo
+- [x] Production deploy builds and serves pages + API (https://screenview-share.vercel.app)
+- [x] Vercel-mode e2e suite (fake Upstash API over HTTP) — 3 tests
+- [ ] Upstash Redis connected to the Vercel project (needs the account owner)
+- [ ] Live end-to-end check against the real deployment
+- [ ] 120-minute soak of the new version (Vercel mode) recorded in TESTING.md
+
 ## Tests
-- [x] Unit tests (`npm test`) — 24 passing
-- [x] e2e (`npm run test:e2e`) — 17 passing, repeated runs with no flakes
+- [x] Unit tests (`npm test`) — 47 passing
+- [x] e2e (`npm run test:e2e`) — 20 passing
 - [x] e2e: host→code→viewer live frames advancing
 - [x] e2e: invalid code
 - [x] e2e: expired code
@@ -57,7 +67,7 @@ written. The test that verifies each item is named where there is one.
 - [x] e2e: view-only (no data channels, no outgoing tracks, recvonly SDP)
 - [x] e2e: admin rejects wrong password, shows sessions
 - [x] soak test (default 5 min; 1-minute and 120-minute runs verified)
-- [x] 120-minute soak run recorded in TESTING.md (240 checks, 0 stalls)
+- [x] 120-minute soak of the first (Socket.io) version recorded in TESTING.md (240 checks, 0 stalls)
 
 ## Docs
 - [x] README.md (with screenshots)
@@ -90,7 +100,10 @@ installable app UI (PWA), invite links, toasts and accessibility polish.
 5. Admin: start with `ADMIN_PASSWORD=secret npm start`, open `/admin`.
 
 ### Known limitations
-- Sessions live in memory: a server restart ends all active sessions.
+- Running locally, sessions live in memory: a server restart ends all active
+  sessions. (On Vercel they live in Redis and survive redeploys.)
+- On Vercel each active session uses ~1–2 small Redis requests per second;
+  Upstash's free tier covers demos, not all-day heavy use.
 - Automated tests run in Chromium only; Edge/Firefox use the same standard
   APIs but were not tested automatically.
 - Screen capture needs HTTPS or `localhost` on the host's side.
