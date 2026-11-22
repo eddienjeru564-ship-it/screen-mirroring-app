@@ -53,7 +53,7 @@ written. The test that verifies each item is named where there is one.
 - [x] Vercel-mode e2e suite (fake Upstash API, and the real SQL in PGlite for Supabase) — 5 tests
 - [x] Supabase store (`SupabaseStore` + `supabase/migrations/0001_screenview_store.sql`), every store/session unit test also runs on it
 - [x] Supabase project "mirroring app" set up and connected to the Vercel project
-- [ ] Live end-to-end check against the real deployment
+- [x] Live end-to-end check against the real deployment (`npm run test:live`): 4/4 pass on Supabase, join-to-video 3.9 s
 - [x] 120-minute soak of the new version (Vercel mode) recorded in TESTING.md: 0 stalls, 19.9 fps, 0 errors
 
 ## Tests
