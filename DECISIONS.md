@@ -190,6 +190,10 @@ aware they are sharing.
   policies, and no API grants. Unit and e2e tests run the real migration in
   PGlite (Postgres in WebAssembly), so the SQL itself is tested, not a JS
   imitation. Upstash is checked first if both are configured.
+- **The Vercel function runs in Dublin (`regions: ["dub1"]`)**, next to the
+  Supabase project (eu-west-1, Ireland). In Washington (Vercel's default)
+  every database call crossed the Atlantic; the live join-to-video time was
+  7.7 s there. The video itself is peer-to-peer and unaffected by the region.
 - **"Stop sharing" now reports its own reason** to viewers ("Sharing stopped")
   instead of the generic "Session ended"; the e2e test was updated to match.
 - **Deployment protection.** Vercel turns on "Vercel Authentication" for new
