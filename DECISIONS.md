@@ -176,6 +176,20 @@ aware they are sharing.
   to work and failing randomly.
 - **The log** goes to a capped Redis list on Vercel (no writable disk) and to
   `logs/sessions.jsonl` locally, as before.
+- **Supabase as a second store (added later).** The user had Supabase
+  connected, so a `SupabaseStore` implements the same interface on Postgres:
+  one table (`screenview_kv`: key, JSON value, expiry in ms) and one
+  `SECURITY DEFINER` function, `screenview_exec`, that runs each operation as a
+  single atomic statement (`INSERT … ON CONFLICT` upserts, `DELETE …
+  RETURNING` for the mailbox drain), so the Redis guarantees (NX, atomic
+  drain, first ending wins) still hold. The server calls it through
+  Supabase's REST API with plain `fetch`. It uses the publishable key plus a
+  random store secret checked inside the function, rather than the
+  service-role key: the secret can only call this one function, while a
+  service-role key would open the whole project. The tables have RLS on, no
+  policies, and no API grants. Unit and e2e tests run the real migration in
+  PGlite (Postgres in WebAssembly), so the SQL itself is tested, not a JS
+  imitation. Upstash is checked first if both are configured.
 - **"Stop sharing" now reports its own reason** to viewers ("Sharing stopped")
   instead of the generic "Session ended"; the e2e test was updated to match.
 - **Deployment protection.** Vercel turns on "Vercel Authentication" for new

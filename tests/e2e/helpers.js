@@ -10,6 +10,7 @@ export const STRICT_RATE = `http://localhost:${BASE_PORT + 2}`;
 export const SHORT_GRACE = `http://localhost:${BASE_PORT + 3}`;
 export const VERCEL_MODE = `http://localhost:${BASE_PORT + 4}`;
 export const VERCEL_NO_STORE = `http://localhost:${BASE_PORT + 5}`;
+export const VERCEL_SUPABASE = `http://localhost:${BASE_PORT + 6}`;
 
 /** Fail the test on any console error or uncaught exception in the page. */
 export function trackErrors(page, label) {

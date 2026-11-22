@@ -51,8 +51,8 @@ rather than by size alone.
 Each IP gets **5 failed join attempts per minute** (`RATE_LIMIT_MAX`,
 `RATE_LIMIT_WINDOW_MS`). Wrong codes, wrong passwords, expired and ended codes
 all count. A correct join clears the counter, so real users are not slowed down.
-The counter lives in the store (Redis on Vercel), so it holds across serverless
-instances. On Vercel the client IP comes from the `X-Forwarded-For` header that
+The counter lives in the store (the database on Vercel), so it holds across
+serverless instances. On Vercel the client IP comes from the `X-Forwarded-For` header that
 Vercel's edge sets itself.
 
 Rough estimate: with ~10 active sessions, one IP at 5 guesses/min has about a
@@ -65,7 +65,7 @@ if the real viewer has already joined).
 
 The host can set a password. The viewer then needs both the code and the
 password. The server stores only a SHA-256 hash of it, for the life of the
-session (memory locally, Redis on Vercel), compares hashes in constant time,
+session (memory locally, the database on Vercel), compares hashes in constant time,
 and never writes it to the log (the log records only `hasPassword`).
 
 ## 5a. Session tokens
@@ -84,12 +84,24 @@ server, so `/api/ice-config` does send them to clients. For a public deployment,
 use short-lived TURN credentials (e.g. coturn's REST-API shared-secret mode) so
 a leaked credential expires quickly.
 
-## 6a. Redis credentials (Vercel)
+## 6a. Database credentials (Vercel)
 
-On Vercel, session state lives in Upstash Redis. Its REST URL and token are
-set as environment variables by Vercel's Upstash integration and are used
-only by the server function; they never reach the browser. Everything in Redis
-expires on its own (sessions after at most 12 hours, dead codes after 1 hour).
+On Vercel, session state lives in a shared store: Supabase (the live site) or
+Upstash Redis. Its credentials are environment variables used only by the
+server function; they never reach the browser. Every entry expires on its own
+(sessions after at most 12 hours, dead codes after 1 hour).
+
+With Supabase, the server does **not** use the service-role key. It calls one
+database function, `screenview_exec`, with the publishable key plus a random
+`SCREENVIEW_STORE_SECRET`. The function refuses any call without that secret,
+and the two tables (`screenview_kv`, `screenview_config`) have row level
+security on, no policies and no API grants, so the publishable key alone
+cannot read or change anything. If the secret ever leaked, it would only give
+access to ScreenView's own short-lived session data, not the rest of the
+project. Rotate it by updating `screenview_config` and the Vercel variable
+together. (Supabase's security advisor flags the function as callable by the
+`anon` role and the tables as having no policies; both are intentional, for
+the reasons above.)
 
 ## 7. Media encryption
 
@@ -103,7 +115,7 @@ everything over HTTPS (with HSTS) automatically.
 ## 8. What is logged
 
 `logs/sessions.jsonl`, one JSON object per line (on Vercel, which has no
-writable disk, the same events go to a Redis list capped at the newest 5000):
+writable disk, the same events go to a list in the store capped at the newest 5000):
 
 | Event | Fields |
 |---|---|
@@ -124,7 +136,7 @@ is disabled (HTTP 503) rather than open. Table cells are filled with
 
 - Running locally, sessions live in memory: if the server process restarts,
   active sessions are lost and the host must start a new one. On Vercel they
-  live in Redis, so redeploys and new function instances do not affect them.
+  live in the database, so redeploys and new function instances do not affect them.
 - Without background timers, a session whose host *and* viewers all vanish is
   only marked ended when something next touches it; its keys still expire
   (12 h), but the admin table may show it without an end time.

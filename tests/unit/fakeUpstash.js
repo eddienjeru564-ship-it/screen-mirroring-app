@@ -3,14 +3,19 @@
 // answers in the same {result} / [{result}] shapes, implementing only the
 // commands ScreenView uses, with Redis semantics (including expiry).
 
-import { MemoryStore, UpstashStore } from '../../server/store.js';
+import { MemoryStore, UpstashStore, SupabaseStore } from '../../server/store.js';
+import { fakeSupabase, TEST_KEY, TEST_SECRET } from './fakeSupabase.js';
 
-/** Both store backends, for running one test suite against each. */
+/** Every store backend, for running one test suite against each. */
 export function backends() {
   return [
     ['memory', (now) => new MemoryStore({ now })],
     ['upstash', (now) => new UpstashStore({
       url: 'https://fake.upstash.io/', token: 'test-token', fetchImpl: fakeUpstash({ now }).fetchImpl,
+    })],
+    ['supabase', (now) => new SupabaseStore({
+      url: 'https://fake.supabase.co/', key: TEST_KEY, secret: TEST_SECRET,
+      fetchImpl: fakeSupabase().fetchImpl, now,
     })],
   ];
 }

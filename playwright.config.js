@@ -1,6 +1,6 @@
 // Playwright config — spins up dedicated ScreenView servers for the e2e suite.
 //
-// Four servers, each with settings a group of tests needs (ports shift with
+// Several servers, each with settings a group of tests needs (ports shift with
 // E2E_PORT_BASE, default 3100):
 //   3100  main suite (1 viewer max, admin password set, lenient rate limit)
 //   3101  short code expiry (1.5 s) for the "expired code" test
@@ -9,6 +9,8 @@
 //   3104  "Vercel mode": VERCEL=1 with an Upstash store (a fake Upstash API on
 //         3110), so sessions, signaling and the log all go through Redis calls
 //   3105  "Vercel mode" with no store configured, to check the clear error
+//   3106  "Vercel mode" with the Supabase store (the real SQL function running
+//         in PGlite behind a fake Supabase API on 3111)
 // Logs go to test-results/ so the real logs/sessions.jsonl stays clean.
 
 import { defineConfig } from '@playwright/test';
@@ -86,5 +88,16 @@ export default defineConfig({
       KV_REST_API_TOKEN: 'test-token',
     }),
     server(BASE_PORT + 5, { VERCEL: '1' }),
+    {
+      command: `node tests/e2e/fakeSupabaseServer.js ${BASE_PORT + 11}`,
+      url: `http://localhost:${BASE_PORT + 11}/`,
+      reuseExistingServer: false,
+    },
+    server(BASE_PORT + 6, {
+      VERCEL: '1',
+      SUPABASE_URL: `http://localhost:${BASE_PORT + 11}`,
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+      SCREENVIEW_STORE_SECRET: 'test-secret',
+    }),
   ],
 });

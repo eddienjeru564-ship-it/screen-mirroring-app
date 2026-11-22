@@ -1,5 +1,6 @@
-// SessionService tests. Every test runs twice: on the in-memory store (local
-// use) and on the Upstash store against a fake Upstash API (Vercel use).
+// SessionService tests. Every test runs on each store: in-memory (local use),
+// Upstash against a fake Upstash API, and Supabase against the real SQL
+// function running in PGlite (both Vercel options).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

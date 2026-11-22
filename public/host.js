@@ -115,7 +115,7 @@ $('startBtn').addEventListener('click', async () => {
     for (const t of state.stream.getTracks()) t.stop();
     state.stream = null;
     $('setupError').textContent = res?.error === 'storage_not_configured'
-      ? 'This server is not set up yet: its session storage (Redis) is missing. See the README.'
+      ? 'This server is not set up yet: its session storage (Supabase or Redis) is missing. See the README.'
       : 'Could not reach the ScreenView server. Check your connection and try again.';
     $('setupError').classList.remove('hidden');
     $('startBtn').disabled = false;

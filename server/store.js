@@ -1,10 +1,12 @@
 // store.js — the small key/value store that holds all live session state.
 //
-// Two interchangeable backends with the same async API:
+// Interchangeable backends with the same async API:
 //   MemoryStore   — in-process, used for `npm start` on a laptop and in tests.
-//   UpstashStore  — Upstash Redis over its REST API, used on Vercel, where each
+//   UpstashStore  — Upstash Redis over its REST API, for Vercel, where each
 //                   request may run in a different function instance and
 //                   nothing can be kept in memory between requests.
+//   SupabaseStore — the same operations in Supabase Postgres (one database
+//                   function), the other option for Vercel.
 //
 // Only the handful of Redis operations ScreenView needs are implemented. Every
 // value is a string; callers JSON-encode objects themselves.
@@ -205,13 +207,95 @@ export class UpstashStore {
 }
 
 /**
- * Pick the store from the environment. Upstash is used when its REST URL and
- * token are present (Vercel's Upstash integration sets KV_REST_API_* or
- * UPSTASH_REDIS_REST_*); otherwise memory.
+ * Supabase (Postgres) via its REST API. Every operation is one call to the
+ * screenview_exec() database function (supabase/migrations/0001_screenview_store.sql),
+ * which runs it as a single atomic statement. The function refuses calls
+ * without the store secret, so the publishable key alone gives no access.
+ */
+export class SupabaseStore {
+  constructor({ url, key, secret, fetchImpl = globalThis.fetch, now = null }) {
+    this.endpoint = url.replace(/\/+$/, '') + '/rest/v1/rpc/screenview_exec';
+    this.key = key;
+    this.secret = secret;
+    this.fetch = fetchImpl;
+    this.now = now; // tests only: a fake clock passed through to the function
+  }
+
+  async cmd(...args) {
+    const body = { p_secret: this.secret, p_cmd: args };
+    if (this.now) body.p_now = this.now();
+    const res = await this.fetch(this.endpoint, {
+      method: 'POST',
+      headers: { apikey: this.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => undefined);
+    if (!res.ok || json === undefined) {
+      throw new Error(`Supabase ${res.status}: ${json?.message || 'request failed'}`);
+    }
+    return json;
+  }
+
+  async get(key) {
+    return this.cmd('get', key);
+  }
+
+  async set(key, value, { px, nx } = {}) {
+    return (await this.cmd('set', key, String(value), px || null, !!nx)) === true;
+  }
+
+  async del(...keys) {
+    if (keys.length) await this.cmd('del', ...keys);
+  }
+
+  async pexpire(key, ms) {
+    await this.cmd('pexpire', key, ms);
+  }
+
+  async pttl(key) {
+    return Number(await this.cmd('pttl', key));
+  }
+
+  async incr(key, px) {
+    return Number(await this.cmd('incr', key, px || null));
+  }
+
+  async hset(key, field, value, px) {
+    await this.cmd('hset', key, field, String(value), px || null);
+  }
+
+  async hgetall(key) {
+    return (await this.cmd('hgetall', key)) || {};
+  }
+
+  async rpush(key, value, { px, max } = {}) {
+    await this.cmd('rpush', key, String(value), px || null, max || null);
+  }
+
+  async lrange(key) {
+    return (await this.cmd('lrange', key)) || [];
+  }
+
+  async drain(key) {
+    return (await this.cmd('drain', key)) || [];
+  }
+}
+
+/**
+ * Pick the store from the environment: Upstash when its REST URL and token are
+ * present (KV_REST_API_* or UPSTASH_REDIS_REST_*), else Supabase when
+ * SUPABASE_URL, a publishable/anon key and SCREENVIEW_STORE_SECRET are set,
+ * else memory.
  */
 export function storeFromEnv(env = process.env) {
   const url = env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN;
   if (url && token) return { store: new UpstashStore({ url, token }), kind: 'upstash' };
+  const sbUrl = env.SUPABASE_URL;
+  const sbKey = env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY;
+  const secret = env.SCREENVIEW_STORE_SECRET;
+  if (sbUrl && sbKey && secret) {
+    return { store: new SupabaseStore({ url: sbUrl, key: sbKey, secret }), kind: 'supabase' };
+  }
   return { store: new MemoryStore(), kind: 'memory' };
 }

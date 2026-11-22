@@ -29,7 +29,7 @@ Nothing to install for either person.
 - Viewer: auto-formatted code box, clear error messages, fullscreen,
   connection badge, reconnecting overlay
 - Optional session password, brute-force rate limiting, Low/Medium/High quality
-- Session log (`logs/sessions.jsonl` locally, Redis on Vercel) and a
+- Session log (`logs/sessions.jsonl` locally, the database on Vercel) and a
   password-protected `/admin` page
 - **Installable as an app** (Chrome/Edge "Install app" button): opens in its own
   window with its own icon, no app store or installer needed
@@ -75,13 +75,22 @@ The repository deploys to Vercel as-is: `vercel.json` serves `public/` from
 Vercel's CDN and runs the API (`api/index.js`) as a serverless function.
 
 Vercel may run each request on a different server instance, so live sessions
-cannot be kept in memory there. ScreenView keeps them in an **Upstash Redis**
-database instead (the free plan is plenty):
+cannot be kept in memory there. ScreenView keeps them in a shared database
+instead, either **Supabase** (what the live site uses) or **Upstash Redis**.
+Both free plans are plenty.
 
 1. Import the GitHub repository in Vercel (Framework preset: **Other**).
-2. In the project, open **Storage → Create Database → Upstash for Redis**, pick
-   the Free plan, and connect it to the project. This sets `KV_REST_API_URL`
-   and `KV_REST_API_TOKEN` for you.
+2. Connect a store, **one** of:
+   - **Supabase:** in a Supabase project, run
+     `supabase/migrations/0001_screenview_store.sql` (SQL editor or
+     `supabase db push`), then store a long random secret:
+     `insert into screenview_config (k, v) values ('secret', '<random>');`.
+     In Vercel set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (the project's
+     publishable or anon key) and `SCREENVIEW_STORE_SECRET` (the same random
+     value, type *Sensitive*).
+   - **Upstash Redis:** in the Vercel project, open **Storage → Create Database
+     → Upstash for Redis**, pick the Free plan and connect it. This sets
+     `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
 3. Optionally set `ADMIN_PASSWORD` under **Settings → Environment Variables**.
 4. Redeploy. <code>https://&lt;your-project&gt;.vercel.app/api/health</code> should say
    `"storageConfigured": true`.
@@ -89,9 +98,9 @@ database instead (the free plan is plenty):
 Without step 2 the site still loads, but starting a session shows a clear
 "session storage is missing" message instead of failing randomly.
 
-Each active session makes roughly 1–2 small Redis requests per second while
-idle (more while a connection is being set up). Upstash's free tier covers
-many demo sessions per month; long all-day use needs a paid plan.
+Each active session makes roughly 1–2 small store requests per second while
+idle (more while a connection is being set up). The free tiers cover demos and
+testing; long all-day use may need a paid plan.
 
 ## Configuration
 
@@ -104,12 +113,13 @@ All settings are optional environment variables (see `.env.example`).
 | `CODE_EXPIRY_MS` | `600000` | Lifetime of an unused code (10 min) |
 | `GRACE_MS` | `60000` | How long a session survives a host disconnect |
 | `VIEWER_STALE_MS` | `12000` | A viewer silent this long counts as gone (it is re-admitted automatically when it returns) |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | *(unset)* | Upstash Redis REST credentials. Required on Vercel; optional locally (memory is used without them) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SCREENVIEW_STORE_SECRET` | *(unset)* | Supabase store (all three needed). On Vercel a store is required: Supabase or Upstash |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | *(unset)* | Upstash Redis store. Optional locally (memory is used without a store) |
 | `MAX_VIEWERS` | `1` | Viewers per session (1–3) |
 | `RATE_LIMIT_MAX` | `5` | Failed join attempts allowed per IP… |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | …per this window |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | *(unset)* | Optional TURN server; STUN-only without it |
-| `LOG_FILE` | `logs/sessions.jsonl` | Session log location (local only; on Vercel the log is kept in Redis) |
+| `LOG_FILE` | `logs/sessions.jsonl` | Session log location (local only; on Vercel the log is kept in the store) |
 
 Example:
 
@@ -143,7 +153,7 @@ images in `docs/img/`; `npm run icons` regenerates the app icons.
 
 ```
 server/   app.js (the HTTP API), index.js (local server), sessions.js,
-          store.js (memory / Upstash Redis), rateLimit.js, logger.js
+          store.js (memory / Upstash Redis / Supabase), rateLimit.js, logger.js
 api/      index.js (Vercel function entry; vercel.json routes /api/* to it)
 public/   index/host/view/admin pages, rtc.js (shared WebRTC helpers),
           signal.js (HTTPS signaling client), app.js

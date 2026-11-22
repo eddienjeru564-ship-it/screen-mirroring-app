@@ -50,14 +50,15 @@ written. The test that verifies each item is named where there is one.
 - [x] Signaling moved from Socket.io to HTTPS polling (works across serverless instances)
 - [x] `api/index.js` + `vercel.json`; Vercel project linked to the GitHub repo
 - [x] Production deploy builds and serves pages + API (https://screenview-share.vercel.app)
-- [x] Vercel-mode e2e suite (fake Upstash API over HTTP) — 3 tests
-- [ ] Upstash Redis connected to the Vercel project (needs the account owner)
+- [x] Vercel-mode e2e suite (fake Upstash API, and the real SQL in PGlite for Supabase) — 5 tests
+- [x] Supabase store (`SupabaseStore` + `supabase/migrations/0001_screenview_store.sql`), every store/session unit test also runs on it
+- [x] Supabase project "mirroring app" set up and connected to the Vercel project
 - [ ] Live end-to-end check against the real deployment
 - [x] 120-minute soak of the new version (Vercel mode) recorded in TESTING.md: 0 stalls, 19.9 fps, 0 errors
 
 ## Tests
-- [x] Unit tests (`npm test`) — 47 passing
-- [x] e2e (`npm run test:e2e`) — 20 passing
+- [x] Unit tests (`npm test`) — 65 passing
+- [x] e2e (`npm run test:e2e`) — 22 passing
 - [x] e2e: host→code→viewer live frames advancing
 - [x] e2e: invalid code
 - [x] e2e: expired code
@@ -101,9 +102,9 @@ installable app UI (PWA), invite links, toasts and accessibility polish.
 
 ### Known limitations
 - Running locally, sessions live in memory: a server restart ends all active
-  sessions. (On Vercel they live in Redis and survive redeploys.)
-- On Vercel each active session uses ~1–2 small Redis requests per second;
-  Upstash's free tier covers demos, not all-day heavy use.
+  sessions. (On Vercel they live in the database and survive redeploys.)
+- On Vercel each active session uses ~1–2 small database requests per second;
+  the free tiers cover demos, not all-day heavy use.
 - Automated tests run in Chromium only; Edge/Firefox use the same standard
   APIs but were not tested automatically.
 - Screen capture needs HTTPS or `localhost` on the host's side.

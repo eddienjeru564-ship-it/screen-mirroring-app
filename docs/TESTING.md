@@ -4,8 +4,8 @@
 
 | Layer | Tool | What it covers | Command |
 |---|---|---|---|
-| Unit | `node --test` | Session/code logic, signaling relay rules, presence and rejoin, rate limiter, both stores, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). An injected clock tests expiry and grace periods in microseconds. **Every store and session test runs twice: on the memory store and on the Upstash store against a fake Upstash REST API** (`tests/unit/fakeUpstash.js`), so the Redis command encoding used on Vercel is tested too. | `npm test` |
-| End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real HTTP signaling, real WebRTC between them. Includes a suite that runs the app in **Vercel mode** (`VERCEL=1`, Upstash store over HTTP). | `npm run test:e2e` |
+| Unit | `node --test` | Session/code logic, signaling relay rules, presence and rejoin, rate limiter, both stores, log writer/reader, and the connection monitor that triggers ICE restarts on `failed` (immediately) or `disconnected` (after 3 s). An injected clock tests expiry and grace periods in microseconds. **Every store and session test runs three times: on the memory store, on the Upstash store against a fake Upstash REST API** (`tests/unit/fakeUpstash.js`), **and on the Supabase store against the real SQL migration running in PGlite**, Postgres compiled to WebAssembly (`tests/unit/fakeSupabase.js`), so both storage backends used on Vercel are tested. | `npm test` |
+| End-to-end | Playwright + Chromium | Real host and viewer pages in separate browser contexts, real HTTP signaling, real WebRTC between them. Includes a suite that runs the app in **Vercel mode** (`VERCEL=1`, with the Upstash store and with the Supabase store, both over HTTP). | `npm run test:e2e` |
 | Soak | Playwright | One live session held for `SOAK_MINUTES`, checked every 30 s. `SOAK_TARGET=vercel` runs it in Vercel mode. | `npm run test:soak` |
 | Live | Playwright | A real deployment: health/storage, clean pages, full session incl. a 14 s signaling outage + rejoin, session full, ended code. | `LIVE_URL=https://… npm run test:live` |
 
@@ -21,7 +21,9 @@ short):
 | 3103 | `GRACE_MS=2000` | host vanishes (grace-period teardown) |
 | 3104 | `VERCEL=1` + Upstash store pointing at the fake Upstash API on 3110 | Vercel-mode tests, Vercel-mode soak |
 | 3105 | `VERCEL=1`, no store | "storage missing" error test |
+| 3106 | `VERCEL=1` + Supabase store pointing at the fake Supabase API on 3111 | Vercel-mode tests (Supabase) |
 | 3110 | fake Upstash REST API (`tests/e2e/fakeUpstashServer.js`) | backs 3104 |
+| 3111 | fake Supabase REST API: the real migration in PGlite (`tests/e2e/fakeSupabaseServer.js`) | backs 3106 |
 
 Ports shift with `E2E_PORT_BASE` (e.g. `E2E_PORT_BASE=3300`), so the suite can
 run while a soak test holds the default ports.
@@ -90,9 +92,9 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 15 | quality presets | Low → viewer receives 640 px wide; switching to High live → 1280 px |
 | 16 | clean pages + installable | `/`, `/host`, `/view`, `/admin`: zero console errors **or warnings**, zero failed or 4xx/5xx requests, service worker registers; Chrome's own `Page.getInstallabilityErrors` reports no manifest problems |
 | 17 | invite link | link uses the LAN address (not `localhost`), opens the viewer with the code filled in, joins, host gets a "now watching" notification |
-| 18 | Vercel mode: full session | health reports the Upstash store; live video; invite link uses the site's own address; viewer offline 4.5 s → rejoins without the code; host ends; zero console errors; admin log read back from Redis |
-| 19 | Vercel mode: limits | session full, and the ended code is refused, across independent requests |
-| 20 | Vercel mode without storage | host sees a clear "session storage (Redis) is missing" message instead of a half-working site |
+| 18 | Vercel mode: full session (run on Upstash, then on Supabase) | health reports the store in use; live video; invite link uses the site's own address; viewer offline 4.5 s → rejoins without the code; host ends; zero console errors; admin log read back from the store |
+| 19 | Vercel mode: limits (Upstash, then Supabase) | session full, and the ended code is refused, across independent requests |
+| 20 | Vercel mode without storage | host sees a clear "session storage (Supabase or Redis) is missing" message instead of a half-working site |
 
 ## Results
 

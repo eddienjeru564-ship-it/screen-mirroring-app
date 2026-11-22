@@ -1,10 +1,12 @@
-// The same behaviour tests run against both store backends, so the in-memory
-// store used locally and the Upstash store used on Vercel behave identically.
+// The same behaviour tests run against every store backend, so the in-memory
+// store used locally and the Upstash and Supabase stores used on Vercel behave
+// identically.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UpstashStore, storeFromEnv } from '../../server/store.js';
+import { UpstashStore, SupabaseStore, storeFromEnv } from '../../server/store.js';
 import { fakeUpstash, backends } from './fakeUpstash.js';
+import { fakeSupabase, TEST_KEY } from './fakeSupabase.js';
 
 for (const [name, make] of backends()) {
   test(`${name}: get/set with NX and expiry`, async () => {
@@ -62,6 +64,14 @@ test('upstash: a bad token surfaces as an error, not silent data loss', async ()
   await assert.rejects(() => s.get('k'), /401/);
 });
 
+test('supabase: a wrong store secret is refused by the database function', async () => {
+  const { fetchImpl } = fakeSupabase();
+  const bad = new SupabaseStore({ url: 'https://x', key: TEST_KEY, secret: 'guess', fetchImpl });
+  await assert.rejects(() => bad.get('k'), /401.*unauthorized/);
+  const noKey = new SupabaseStore({ url: 'https://x', key: 'wrong', secret: 'guess', fetchImpl });
+  await assert.rejects(() => noKey.get('k'), /401/);
+});
+
 test('storeFromEnv picks Upstash only when URL and token are both set', () => {
   assert.equal(storeFromEnv({}).kind, 'memory');
   assert.equal(storeFromEnv({ KV_REST_API_URL: 'https://x' }).kind, 'memory');
@@ -70,4 +80,7 @@ test('storeFromEnv picks Upstash only when URL and token are both set', () => {
     storeFromEnv({ UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' }).kind,
     'upstash',
   );
+  const sb = { SUPABASE_URL: 'https://p.supabase.co', SUPABASE_PUBLISHABLE_KEY: 'k' };
+  assert.equal(storeFromEnv(sb).kind, 'memory'); // no secret, no Supabase
+  assert.equal(storeFromEnv({ ...sb, SCREENVIEW_STORE_SECRET: 's' }).kind, 'supabase');
 });

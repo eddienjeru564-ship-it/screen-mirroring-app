@@ -11,7 +11,7 @@ The same code runs in two places:
   and keeps sessions in memory.
 - **On Vercel**: the pages come from Vercel's CDN and the API runs as a
   serverless function (`api/index.js`). Each request may land on a different
-  function instance, so sessions are kept in **Upstash Redis**, not in memory.
+  function instance, so sessions are kept in a shared database (**Supabase** on the live site, or **Upstash Redis**), not in memory.
 
 ```
  Host browser                  ScreenView API                   Viewer browser
@@ -33,9 +33,9 @@ The same code runs in two places:
 | `server/index.js` | Local server: the API plus the static pages, one `npm start`. |
 | `api/index.js` + `vercel.json` | Vercel entry point. `vercel.json` routes `/api/*` to the function and serves `public/` from the CDN. |
 | `server/sessions.js` | All session logic: code generation (`crypto.randomInt`), expiry, viewer limit, passwords, presence, mailboxes. Stateless: everything is read from and written to the store on each request. |
-| `server/store.js` | The store: `MemoryStore` (local) or `UpstashStore` (Redis over Upstash's REST API, used on Vercel). Same small API, chosen from environment variables. |
+| `server/store.js` | The store: `MemoryStore` (local), `UpstashStore` (Redis over Upstash's REST API) or `SupabaseStore` (Postgres: the `screenview_exec` function in `supabase/migrations/`, called over Supabase's REST API). Same small API, chosen from environment variables. |
 | `server/rateLimit.js` | Failed join attempts per IP, kept in the store. |
-| `server/logger.js` | Append-only audit log: a JSON-lines file locally, a capped Redis list on Vercel; folded into per-session rows for `/admin`. |
+| `server/logger.js` | Append-only audit log: a JSON-lines file locally, a capped list in the store on Vercel; folded into per-session rows for `/admin`. |
 | `public/signal.js` | Browser side of signaling: JSON POSTs, a poll loop (300 ms while connecting, ~2 s when idle), batching of ICE candidates, quiet retries. |
 | `public/rtc.js` | Shared WebRTC helpers: ICE config fetch, quality presets, connection-health monitor. |
 | `public/host.js` | Captures the screen, creates the session, keeps one `RTCPeerConnection` per viewer, performs ICE restarts. |
