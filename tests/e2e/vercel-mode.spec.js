@@ -35,13 +35,15 @@ test(`vercel mode (${storeKind}): full session, rejoin, end and log, with a clea
   await expect(viewer.page.locator('#goneTitle')).toHaveText('Session ended');
   expect([...host.errors, ...viewer.errors]).toEqual([]);
 
-  // The admin log lives in Redis on Vercel (no disk there).
-  const res = await fetch(`${BASE}/api/admin/sessions`, {
-    headers: { 'x-admin-password': 'test-admin' },
-  });
-  const { sessions } = await res.json();
-  const row = sessions.find((s) => s.code === host.code.replace('-', ''));
-  expect(row).toMatchObject({ endReason: 'host_ended', viewerJoins: 1 });
+  // The admin log lives in the store on Vercel (no disk there). Ending is
+  // fire-and-forget from the host, so the session_end log line can land a
+  // moment after the UI switches — poll rather than read once.
+  const readRow = async () => {
+    const res = await fetch(`${BASE}/api/admin/sessions`, { headers: { 'x-admin-password': 'test-admin' } });
+    const { sessions } = await res.json();
+    return sessions.find((s) => s.code === host.code.replace('-', ''));
+  };
+  await expect.poll(readRow, { timeout: 10_000 }).toMatchObject({ endReason: 'host_ended', viewerJoins: 1 });
 });
 
 test(`vercel mode (${storeKind}): session full and ended codes work across requests`, async ({ browser }) => {

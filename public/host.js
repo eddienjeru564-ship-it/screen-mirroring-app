@@ -31,6 +31,7 @@ window.screenview = {
   get peerCount() { return state.peers.size; },
   get sessionId() { return state.sessionId; },
   get sharing() { return !!state.stream; },
+  get audioShared() { return !!state.stream && state.stream.getAudioTracks().length > 0; },
 };
 
 // Test-only hooks (?test=1) used by the e2e reconnect tests. Not reachable in
@@ -50,9 +51,12 @@ async function getScreenStream() {
     // Test-only deterministic source: an animated canvas. Documented in TESTING.md.
     return makeTestStream();
   }
+  // audio:true makes the browser offer a "share audio" checkbox (tab audio, or
+  // system audio on Windows/Chrome). If the host doesn't tick it, the stream
+  // simply has no audio track and we carry on video-only.
   return navigator.mediaDevices.getDisplayMedia({
     video: { frameRate: 30 },
-    audio: false,
+    audio: true,
   });
 }
 
@@ -75,6 +79,19 @@ function makeTestStream() {
   const iv = setInterval(draw, 1000 / 30);
   stream.getVideoTracks()[0].addEventListener('ended', () => clearInterval(iv));
   stream._testInterval = iv;
+  // A quiet tone, so the audio path (host capture → viewer playback) is real
+  // and testable; getDisplayMedia's fake device provides no audio track.
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.02;
+    const dest = ctx.createMediaStreamDestination();
+    osc.connect(gain).connect(dest);
+    osc.start();
+    stream.addTrack(dest.stream.getAudioTracks()[0]);
+    stream._testAudio = ctx;
+  } catch { /* no WebAudio: stay video-only */ }
   return stream;
 }
 
@@ -136,8 +153,27 @@ function showLive(codePretty, hasPassword) {
   $('preview').srcObject = state.stream;
   $('liveQuality').value = state.quality;
   if (hasPassword) $('pwNote').classList.remove('hidden');
+  showAudioNote();
   state.startedAt = Date.now();
   tickTimer();
+}
+
+// Tell the host whether their viewers will hear sound, since it depends on a
+// checkbox in the browser's share picker that is easy to miss.
+function showAudioNote() {
+  const note = $('audioNote');
+  if (!note) return;
+  if (state.stream.getAudioTracks().length > 0) {
+    note.textContent = '🔊 Sharing audio — viewers can turn sound on.';
+    note.classList.remove('warn');
+  } else {
+    note.textContent = '🔇 No audio is being shared. To include sound, end the '
+      + 'session and start again, ticking “Share tab audio” / “Share system '
+      + 'audio” in the browser’s picker. (System audio isn’t available on every '
+      + 'OS or browser.)';
+    note.classList.add('warn');
+  }
+  note.classList.remove('hidden');
 }
 
 // ---------- Per-viewer peer connections ----------
@@ -309,6 +345,7 @@ function showEnded(reason) {
   if (state.stream) {
     for (const t of state.stream.getTracks()) t.stop();
     if (state.stream._testInterval) clearInterval(state.stream._testInterval);
+    if (state.stream._testAudio) state.stream._testAudio.close().catch(() => {});
   }
   state.stream = null;
   $('live').classList.add('hidden');

@@ -19,9 +19,17 @@ pieces needed for control do not exist anywhere in the code:
   dropped) between one host and its own viewers. Every request must carry the
   sender's secret token; a viewer can only ever reach its own host.
 
-The e2e test *"viewer is view-only"* checks this on a live session: zero data
-channels, zero outgoing tracks, no `m=application` section in the SDP, and
-every media section `recvonly`.
+Audio does not change this. If the host chooses to share audio (a checkbox in
+the browser's own picker), that audio travels **host → viewer only**: it is one
+more track the host adds and the viewer merely receives, so the viewer's SDP
+audio section is `recvonly` too. The viewer still adds no track of its own, so
+nothing — audio, video or data — ever flows from viewer to host.
+
+Two e2e tests check this on live sessions. *"viewer is view-only"* asserts zero
+data channels, zero outgoing tracks, no `m=application` section, and every media
+section `recvonly`. *"audio … stays host→viewer only"* shares audio and then
+re-checks the same guarantees, confirming the extra `m=audio` section is
+`recvonly` and the viewer's outgoing-track count is still zero.
 
 ## 2. The host always knows they are sharing
 

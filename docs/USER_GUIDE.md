@@ -29,6 +29,11 @@ app. You can skip this; it works the same in a normal browser tab.
    the code.
 4. Click **Start sharing**. Your browser asks what to share — pick
    **Entire screen**, a **Window**, or a **Tab**, then click **Share**.
+   To let your viewer hear sound, tick **Share tab audio** (when sharing a tab)
+   or **Share system audio** (when sharing a screen, on Windows/Chrome) in that
+   same box before clicking **Share**. Sharing a plain window usually has no
+   audio option, and macOS can't share system audio — if you need sound there,
+   share a **Tab** instead.
 
    ![Host setup](img/host-setup.png)
 
@@ -74,9 +79,13 @@ more than a minute, the session closes.
 
    ![Watching](img/viewer-watching.png)
 
-5. Click **⛶ Fullscreen**, press **F**, or double-click the picture to fill
+5. If the host is sharing sound, a **🔊/🔇 Sound** button appears over the
+   video. Sound may start off (browsers block surprise audio) — click it once
+   to turn sound on, and again to mute. No button means the host isn't sharing
+   audio.
+6. Click **⛶ Fullscreen**, press **F**, or double-click the picture to fill
    your screen; press **Esc** (or **F** again) to leave fullscreen.
-6. Click **Leave** when you're done.
+7. Click **Leave** when you're done.
 
 ### Messages you might see
 

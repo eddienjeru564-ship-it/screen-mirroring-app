@@ -4,7 +4,7 @@
 // serves the latest code; the cache is only a fallback when the server can't be
 // reached. The API (/api, which also carries signaling) is never cached.
 
-const CACHE = 'screenview-v2';
+const CACHE = 'screenview-v3';
 const SHELL = [
   '/', '/host', '/view', '/admin',
   '/styles.css', '/app.js', '/rtc.js', '/signal.js', '/host.js', '/view.js', '/admin.js',

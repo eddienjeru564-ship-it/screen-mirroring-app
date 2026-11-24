@@ -40,6 +40,8 @@ window.screenview = {
   },
   get connectionState() { return state.pc?.connectionState ?? 'none'; },
   get videoWidth() { return $('video')?.videoWidth ?? 0; },
+  get audioTracks() { return $('video')?.srcObject?.getAudioTracks().length ?? 0; },
+  get soundOn() { const v = $('video'); return !!v && !v.muted; },
   get offersReceived() { return state.offersReceived; },
   get localSdp() { return state.pc?.localDescription?.sdp ?? ''; },
   get framesDecoded() {
@@ -133,6 +135,11 @@ function setupPeer() {
     if (video.srcObject !== stream) video.srcObject = stream;
     video.play?.().catch(() => {});
     hideOverlay();
+    // Show the sound control when (and only when) the host is sharing audio.
+    // Browsers block unmuted autoplay, so start muted and offer to turn it on;
+    // if the browser allows it, turn it on right away.
+    stream.addEventListener?.('addtrack', updateSoundControl);
+    updateSoundControl();
   });
 
   pc.addEventListener('icecandidate', (e) => {
@@ -248,6 +255,47 @@ function setStatus(connState) {
   else if (connState === 'failed' || connState === 'disconnected') badge.className = 'badge warn';
   else badge.className = 'badge';
 }
+
+// ---------- Sound ----------
+// The <video> starts muted so it always autoplays. When the host shares audio
+// we reveal a toggle and try to turn sound on; if the browser blocks unmuted
+// playback, the viewer turns it on with a click (that click is the gesture
+// the browser wants).
+function updateSoundControl() {
+  const video = $('video');
+  const hasAudio = (video.srcObject?.getAudioTracks().length ?? 0) > 0;
+  const btn = $('soundBtn');
+  if (!hasAudio) { btn.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  if (!state.triedUnmute) {
+    state.triedUnmute = true;
+    enableSound(); // may be blocked; the button then does it on click
+  } else {
+    setSoundLabel();
+  }
+}
+
+async function enableSound() {
+  const video = $('video');
+  video.muted = false;
+  try {
+    await video.play();
+  } catch {
+    video.muted = true; // autoplay with sound blocked — wait for a click
+  }
+  setSoundLabel();
+}
+
+function setSoundLabel() {
+  const video = $('video');
+  $('soundBtn').textContent = video.muted ? '🔇 Sound off' : '🔊 Sound on';
+}
+
+$('soundBtn').addEventListener('click', () => {
+  const video = $('video');
+  if (video.muted) enableSound();
+  else { video.muted = true; setSoundLabel(); }
+});
 
 function toggleFullscreen() {
   const stage = $('video').parentElement;

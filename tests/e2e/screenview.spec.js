@@ -135,6 +135,39 @@ test('viewer is view-only: no data channels and no outgoing tracks', async ({ br
   }
 });
 
+test('audio shared by the host reaches the viewer and stays host→viewer only', async ({ browser }) => {
+  const host = await startHost(browser);
+  const viewer = await openViewer(browser, MAIN, host.code);
+  await expectLiveVideo(viewer.page);
+
+  // The host advertises it is sharing audio (the test source adds a tone).
+  expect(await host.page.evaluate(() => window.screenview.audioShared)).toBe(true);
+  await expect(host.page.locator('#audioNote')).toContainText('Sharing audio');
+
+  // The viewer receives exactly one audio track, and the sound control appears.
+  await expect.poll(() => viewer.page.evaluate(() => window.screenview.audioTracks), {
+    timeout: 10_000,
+  }).toBe(1);
+  await expect(viewer.page.locator('#soundBtn')).toBeVisible();
+
+  // Autoplay-with-sound is allowed in the test browser, so sound turns on, and
+  // the toggle mutes/unmutes.
+  await expect.poll(() => viewer.page.evaluate(() => window.screenview.soundOn)).toBe(true);
+  await viewer.page.click('#soundBtn');
+  expect(await viewer.page.evaluate(() => window.screenview.soundOn)).toBe(false);
+
+  // View-only is unchanged: the viewer still sends nothing, and its audio
+  // section is receive-only.
+  const sdp = await viewer.page.evaluate(() => window.screenview.localSdp);
+  expect(sdp).toContain('m=audio');
+  for (const section of sdp.split(/\r?\nm=/).slice(1)) {
+    expect(section).toMatch(/a=recvonly|a=inactive/);
+    expect(section).not.toMatch(/a=(sendrecv|sendonly)/);
+  }
+  expect(await viewer.page.evaluate(() => window.screenview.outgoingTrackCount)).toBe(0);
+  expect([...host.errors, ...viewer.errors]).toEqual([]);
+});
+
 test('password-protected session requires the password', async ({ browser }) => {
   const host = await startHost(browser, MAIN, { password: 'open-sesame' });
   const noPw = await openViewer(browser, MAIN, host.code);

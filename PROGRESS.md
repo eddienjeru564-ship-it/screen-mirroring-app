@@ -58,7 +58,7 @@ written. The test that verifies each item is named where there is one.
 
 ## Tests
 - [x] Unit tests (`npm test`) — 65 passing
-- [x] e2e (`npm run test:e2e`) — 22 passing
+- [x] e2e (`npm run test:e2e`) — 23 passing
 - [x] e2e: host→code→viewer live frames advancing
 - [x] e2e: invalid code
 - [x] e2e: expired code

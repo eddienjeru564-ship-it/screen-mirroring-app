@@ -85,7 +85,8 @@ instead of downloading: `CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | 8 | signaling drop | host offline 3 s, viewer offline 4.5 s (longer than `VIEWER_STALE_MS`, so it is counted as gone) → viewer re-admitted by token → new offer → frames resume, viewer never returns to code entry |
 | 9 | ICE restart | `restartIce()` → new offer → frames keep advancing |
 | 10 | view-only | 0 data channels, 0 outgoing tracks, no `m=application`, all media `recvonly` |
-| 11 | password | missing/wrong password rejected; right one works |
+| 11 | audio host→viewer | host shares a tone; viewer receives one `m=audio` track and a sound toggle; still 0 outgoing tracks and every section `recvonly`; mute/unmute works |
+| 11a | password | missing/wrong password rejected; right one works |
 | 12 | rate limiting | 4th wrong code in a minute → "Too many attempts" |
 | 13 | admin | wrong password rejected; right one lists the ended session with `host_ended` |
 | 14 | host vanishes | host tab closed → viewer sees "Host disconnected" after the grace period |

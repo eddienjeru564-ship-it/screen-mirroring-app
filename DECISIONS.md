@@ -201,3 +201,15 @@ aware they are sharing.
   preview deployments, so the production site is public.
 - **Domain.** `screen-mirroring-app.vercel.app` was taken by another account,
   so the production domain is `screenview-share.vercel.app`.
+- **Optional audio (added later).** The host now requests `audio: true` in
+  `getDisplayMedia`, so the browser offers its "share audio" checkbox; if the
+  host ticks it, the audio track is added to each viewer's connection like the
+  video one. It is purely additive and host → viewer only, so the view-only
+  guarantees are unchanged (the viewer still adds no track; its audio section
+  is `recvonly`). The viewer's `<video>` stays muted so it always autoplays,
+  and a sound toggle appears only when audio is present — it tries to unmute
+  at once and, if the browser blocks unmuted autoplay, the first click (a user
+  gesture) turns sound on. Audio availability depends on the OS and browser
+  (no system audio on macOS, none when sharing a bare window), so the host
+  dashboard says whether sound is actually being shared. Server, store and
+  message format were untouched.

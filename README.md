@@ -18,7 +18,9 @@ Nothing to install for either person.
 - 6-digit join codes from `crypto.randomInt`; unused codes expire after 10 min,
   ended codes never work again
 - Peer-to-peer WebRTC video; the server only relays signaling
-- View-only by design: viewer is `recvonly`, no data channel (tested)
+- Optional audio: if the host ticks "share audio" in the browser's picker, the
+  viewer gets a sound toggle (host → viewer only)
+- View-only by design: viewer is `recvonly`, no data channel, sends no media (tested)
 - Built for long sessions: automatic ICE restart, signaling that quietly retries
   and re-admits a dropped viewer automatically (no re-entering the code),
   60 s grace period for the host
